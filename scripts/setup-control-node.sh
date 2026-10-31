@@ -71,6 +71,9 @@ main() {
     *) echo "Adicione ${BIN_DIR} ao PATH (ex.: no ~/.bashrc)." >&2 ;;
   esac
   export PATH="${BIN_DIR}:${PATH}"
+  # pipx próprio: ignora instalações pré-existentes (ex.: /opt/pipx dos runners do GitHub)
+  export PIPX_HOME="${HOME}/.local/share/pipx"
+  export PIPX_BIN_DIR="${BIN_DIR}"
 
   log "pacotes apt"
   sudo apt-get update -qq
