@@ -1,9 +1,11 @@
 # Em check mode num host sem k3s ainda não há API para consultar.
 - name: Bootstrap do cluster
   when: not ansible_check_mode or k3s_installed_version | default('') | length > 0
-  module_defaults:
-    group/kubernetes.core.k8s:
-      kubeconfig: "{{ cluster_bootstrap_kubeconfig }}"
+  # Via env (e não o parâmetro `kubeconfig`): o action plugin lê o parâmetro no
+  # controller sem become; a env é lida pelo módulo no host, já como root.
+  environment:
+    K8S_AUTH_KUBECONFIG: "{{ cluster_bootstrap_kubeconfig }}"
+    KUBECONFIG: "{{ cluster_bootstrap_kubeconfig }}"
   block:
     - name: Criar namespaces de bootstrap
       kubernetes.core.k8s:
@@ -32,8 +34,6 @@
 
     - name: Verificar se o release do ArgoCD já existe
       ansible.builtin.command: helm status argocd --namespace argocd
-      environment:
-        KUBECONFIG: "{{ cluster_bootstrap_kubeconfig }}"
       register: cluster_bootstrap_argocd_status
       changed_when: false
       failed_when: false
@@ -71,8 +71,6 @@
           - --wait
           - --timeout
           - 10m
-      environment:
-        KUBECONFIG: "{{ cluster_bootstrap_kubeconfig }}"
       when: cluster_bootstrap_argocd_status.rc != 0
       changed_when: true
 
