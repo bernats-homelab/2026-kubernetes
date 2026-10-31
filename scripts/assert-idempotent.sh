@@ -8,11 +8,14 @@ trap 'rm -f "${log}"' EXIT
 
 ansible-playbook "$@" | tee "${log}"
 
-if ! grep -qE '^[^ ]+[[:space:]]+: ok=' "${log}"; then
+# Remove cores ANSI (ANSIBLE_FORCE_COLOR) e fica só com as linhas do PLAY RECAP
+recap="$(sed -E 's/\x1b\[[0-9;]*m//g' "${log}" | grep -E '^[^ ]+[[:space:]]+: ok=' || true)"
+
+if [[ -z "${recap}" ]]; then
   echo "ERRO: PLAY RECAP não encontrado na saída." >&2
   exit 1
 fi
-if grep -E '^[^ ]+[[:space:]]+: ok=' "${log}" | grep -qvE 'changed=0[[:space:]]'; then
+if grep -qvE 'changed=0[[:space:]]' <<<"${recap}"; then
   echo "ERRO: playbook não é idempotente (changed > 0 na segunda execução)." >&2
   exit 1
 fi
