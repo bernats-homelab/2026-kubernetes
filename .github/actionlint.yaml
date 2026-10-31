@@ -1,0 +1,4 @@
+# actionlint v1.7.12 ainda não lista o runner hospedado ubuntu-26.04.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

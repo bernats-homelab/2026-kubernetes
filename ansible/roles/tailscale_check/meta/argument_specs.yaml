@@ -1,0 +1,4 @@
+argument_specs:
+  main:
+    short_description: Verifica (somente leitura) que o Tailscale do host está ativo e expõe nome/IPs
+    options: {}

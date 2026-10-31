@@ -1,0 +1,21 @@
+# Repositório que o ArgoCD sincroniza (sobrescrito no CI com o repo/SHA do PR)
+git_repo_url: https://github.com/bernats-homelab/2026-kubernetes
+git_revision: main
+
+# false apenas no CI: pula a verificação do Tailscale do host e o Tailscale Operator
+tailscale_enabled: true
+
+# Segredos criptografados com SOPS; descriptografados no controller
+secrets_file: "{{ playbook_dir }}/secrets/secrets.sops.yaml"
+
+# Versões fixadas dos binários instalados no notebook
+k3s_version: v1.37.1+k3s1
+k3s_install_script_sha256: ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b
+helm_version: v4.3.1
+helm_sha256: 0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b
+
+# Versões dos charts: fonte única em kubernetes/apps/values.yaml (lido no controller)
+apps_values: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../kubernetes/apps/values.yaml') | from_yaml }}"
+
+# Kubeconfig gravado no controller (fora do repo) apontando para o MagicDNS do notebook
+kubeconfig_local_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.kube/notebook.yaml"

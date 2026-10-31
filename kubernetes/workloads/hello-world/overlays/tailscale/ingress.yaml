@@ -1,0 +1,15 @@
+# Exposto na tailnet como https://hello.<sua-tailnet> com TLS automático do Tailscale.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello-world
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: hello-world
+      port:
+        name: http
+  tls:
+    - hosts:
+        - hello

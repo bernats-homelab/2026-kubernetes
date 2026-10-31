@@ -1,0 +1,27 @@
+{# Renderizado pelo Ansible (cluster_bootstrap). Depois de aplicado, o ArgoCD assume. #}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: {{ git_repo_url | to_json }}
+    targetRevision: {{ git_revision | to_json }}
+    path: kubernetes/apps
+    helm:
+      valuesObject:
+        repoURL: {{ git_repo_url | to_json }}
+        targetRevision: {{ git_revision | to_json }}
+        tailscaleOperator:
+          enabled: {{ tailscale_enabled | bool | to_json }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

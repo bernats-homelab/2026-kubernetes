@@ -1,0 +1,102 @@
+# Instale e rode no WSL (máquina de controle): `make deps && pre-commit install`.
+# Os hooks `language: system` dependem das ferramentas instaladas por scripts/setup-control-node.sh.
+# O job `lint` do CI roda exatamente esta configuração.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^kubernetes/apps/templates/|\.j2$
+      - id: check-json
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [--strict]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.14.1-1
+    hooks:
+      - id: shfmt
+        args: [-d, -i, "2", -ci]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: local
+    hooks:
+      - id: no-local-inventory
+        name: inventário real (hostname/usuário) não pode ser commitado
+        language: fail
+        entry: "Apenas inventory.example.yaml e ci.yaml podem ser versionados em ansible/inventory/"
+        files: ^ansible/inventory/
+        exclude: ^ansible/inventory/(inventory\.example|ci)\.yaml$
+
+      - id: no-kubeconfig
+        name: kubeconfig não pode ser commitado
+        language: fail
+        entry: "kubeconfigs vivem em ~/.kube/, fora do repo"
+        files: (^|/)(kubeconfig[^/]*|[^/]*\.kubeconfig)$
+
+      - id: sops-encrypted
+        name: arquivos *.sops.yaml estão criptografados
+        language: script
+        entry: scripts/check-sops-encrypted.sh
+        # exclui o arquivo de configuração `.sops.yaml`
+        files: (^|/)[^/.][^/]*\.sops\.yaml$
+
+      - id: no-lockout
+        name: playbook não mexe em Tailscale/SSH/firewall/rede do host
+        language: script
+        entry: scripts/check-no-lockout.sh
+        files: ^ansible/
+        types: [yaml]
+
+      - id: ansible-lint
+        name: ansible-lint (profile production)
+        language: system
+        entry: ansible-lint
+        pass_filenames: false
+        files: ^ansible/
+
+      - id: helm-lint
+        name: helm lint --strict (chart app-of-apps)
+        language: system
+        entry: helm lint --strict kubernetes/apps
+        pass_filenames: false
+        files: ^kubernetes/apps/
+
+      - id: helm-unittest
+        name: helm unittest (chart app-of-apps)
+        language: system
+        entry: helm unittest kubernetes/apps
+        pass_filenames: false
+        files: ^kubernetes/apps/
+
+      - id: validate-manifests
+        name: kubeconform + kube-linter nos manifests do repo
+        language: script
+        entry: scripts/validate-manifests.sh
+        pass_filenames: false
+        files: ^kubernetes/

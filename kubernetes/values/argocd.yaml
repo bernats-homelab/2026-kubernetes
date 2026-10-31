@@ -1,0 +1,10 @@
+# Values do chart argo-cd, usados no helm install do bootstrap e no self-manage.
+# O Ingress via Tailscale é adicionado em kubernetes/apps/templates/argocd.yaml.
+configs:
+  params:
+    # TLS termina no proxy do Tailscale Operator
+    server.insecure: true
+dex:
+  enabled: false
+notifications:
+  enabled: false

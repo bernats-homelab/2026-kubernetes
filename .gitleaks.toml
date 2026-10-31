@@ -1,0 +1,16 @@
+title = "2026-kubernetes"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "age-private-key"
+description = "Chave privada age (nunca deve sair de ~/.config/sops/age/keys.txt)"
+regex = '''AGE-SECRET-KEY-1[0-9A-Z]{58}'''
+keywords = ["age-secret-key"]
+
+[[rules]]
+id = "tailnet-name"
+description = "Nome da tailnet (*.ts.net) identifica a rede privada; é descoberto em runtime"
+regex = '''[a-z0-9-]+\.ts\.net'''
+keywords = ["ts.net"]

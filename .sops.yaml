@@ -1,0 +1,6 @@
+# Chave PÚBLICA age usada para criptografar. A privada fica só no WSL:
+# ~/.config/sops/age/keys.txt (backup no gerenciador de senhas).
+# Substitua o recipient abaixo pela saída de `age-keygen -y ~/.config/sops/age/keys.txt`.
+creation_rules:
+  - path_regex: .*\.sops\.yaml$
+    age: age1replacewithyourpublickeyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

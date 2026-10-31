@@ -1,0 +1,14 @@
+argument_specs:
+  main:
+    short_description: Pacotes, sysctl e helm no host
+    options:
+      helm_version:
+        type: str
+        required: true
+      helm_sha256:
+        type: str
+        required: true
+      base_packages:
+        type: list
+        elements: str
+        default: [curl, jq, python3-kubernetes, python3-yaml]

@@ -1,0 +1,36 @@
+- name: Garantir Ubuntu suportado
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] in preflight_supported_ubuntu_versions
+      - ansible_facts['architecture'] == 'x86_64'
+    fail_msg: >-
+      Host é {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+      ({{ ansible_facts['architecture'] }}); suportado: Ubuntu {{ preflight_supported_ubuntu_versions | join(', ') }} x86_64.
+
+- name: Garantir que a conexão não é feita como root
+  ansible.builtin.assert:
+    that:
+      - (ansible_user | default(lookup('ansible.builtin.env', 'USER'))) != 'root'
+    fail_msg: Conecte com um usuário comum e use become (sudo).
+
+- name: Garantir que o host está na tailnet
+  ansible.builtin.assert:
+    that:
+      - "'tailscale0' in ansible_facts['interfaces']"
+    fail_msg: Interface tailscale0 ausente; o playbook não instala nem configura o Tailscale do host.
+  when: tailscale_enabled | bool
+
+- name: Ler estado do firewall do host (somente leitura)
+  ansible.builtin.command: ufw status # lockout-safe: leitura
+  register: preflight_firewall
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Avisar se o firewall do host está ativo
+  ansible.builtin.debug:
+    msg: >-
+      O firewall do host está ativo. O playbook NÃO o altera; se pods não alcançarem a API,
+      libere manualmente 10.42.0.0/16 e 10.43.0.0/16 (veja o README).
+  when: "'Status: active' in preflight_firewall.stdout"

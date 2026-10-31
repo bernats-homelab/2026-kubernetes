@@ -1,0 +1,4 @@
+# Credenciais OAuth: Secret `operator-oauth` criado pelo Ansible (cluster_bootstrap)
+# a partir do SOPS. Não defina oauth.clientId/clientSecret aqui.
+operatorConfig:
+  hostname: k3s-notebook-operator

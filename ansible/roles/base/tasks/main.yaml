@@ -1,0 +1,48 @@
+- name: Instalar pacotes base
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Configurar sysctl para k3s
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-k3s.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Gerenciado pelo Ansible (2026-kubernetes)
+      fs.inotify.max_user_instances = 8192
+      fs.inotify.max_user_watches = 524288
+  notify: Recarregar sysctl
+
+- name: Baixar helm
+  ansible.builtin.get_url:
+    url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    dest: "/var/cache/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    checksum: "sha256:{{ helm_sha256 }}"
+    mode: "0644"
+  register: base_helm_archive
+
+- name: Criar diretório versionado do helm
+  ansible.builtin.file:
+    path: "/opt/helm-{{ helm_version }}"
+    state: directory
+    mode: "0755"
+
+- name: Extrair helm
+  ansible.builtin.unarchive:
+    src: "/var/cache/helm-{{ helm_version }}-linux-amd64.tar.gz"
+    dest: "/opt/helm-{{ helm_version }}"
+    remote_src: true
+    creates: "/opt/helm-{{ helm_version }}/linux-amd64/helm"
+  # Em check mode o get_url não baixa o arquivo, então não há o que extrair.
+  when: not (ansible_check_mode and base_helm_archive is changed)
+
+- name: Linkar helm em /usr/local/bin
+  ansible.builtin.file:
+    src: "/opt/helm-{{ helm_version }}/linux-amd64/helm"
+    dest: /usr/local/bin/helm
+    state: link
+    force: true

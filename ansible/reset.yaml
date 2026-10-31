@@ -1,0 +1,26 @@
+- name: Remover o k3s (não toca em Tailscale nem SSH)
+  hosts: k3s_server
+  become: true
+  gather_facts: false
+  vars_prompt:
+    - name: reset_confirm
+      prompt: "Isso APAGA o cluster k3s e todos os dados dele. Digite 'yes' para continuar"
+      private: false
+  tasks:
+    - name: Exigir confirmação explícita
+      ansible.builtin.assert:
+        that: reset_confirm == 'yes'
+        fail_msg: Reset cancelado.
+
+    - name: Desinstalar k3s
+      ansible.builtin.command: /usr/local/bin/k3s-uninstall.sh
+      args:
+        removes: /usr/local/bin/k3s-uninstall.sh
+
+    - name: Remover arquivos de bootstrap
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/k3s-bootstrap
+        - /etc/rancher/k3s

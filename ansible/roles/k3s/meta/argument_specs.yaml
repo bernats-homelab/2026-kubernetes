@@ -1,0 +1,13 @@
+argument_specs:
+  main:
+    short_description: Instala e configura k3s single-node
+    options:
+      k3s_version:
+        type: str
+        required: true
+      k3s_install_script_sha256:
+        type: str
+        required: true
+      tailscale_enabled:
+        type: bool
+        required: true

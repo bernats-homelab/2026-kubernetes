@@ -1,0 +1,25 @@
+- name: Bootstrap do cluster k3s
+  hosts: k3s_server
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Carregar segredos SOPS (descriptografados no controller)
+      community.sops.load_vars:
+        file: "{{ secrets_file }}"
+      no_log: true
+      tags: [always]
+  roles:
+    - role: preflight
+      tags: [preflight, always]
+    - role: base
+      tags: [base]
+    - role: tailscale_check
+      when: tailscale_enabled | bool
+      tags: [tailscale, always]
+    - role: k3s
+      tags: [k3s]
+    - role: cluster_bootstrap
+      tags: [cluster]
+    - role: kubeconfig_export
+      when: tailscale_enabled | bool
+      tags: [kubeconfig]

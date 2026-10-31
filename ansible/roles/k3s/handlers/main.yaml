@@ -1,0 +1,5 @@
+- name: Reiniciar k3s
+  ansible.builtin.systemd_service:
+    name: k3s
+    state: restarted
+  when: not ansible_check_mode or k3s_installed_version | default('') | length > 0

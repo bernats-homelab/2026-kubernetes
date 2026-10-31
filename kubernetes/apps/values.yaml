@@ -1,0 +1,20 @@
+# Repositório e revisão que as Applications filhas sincronizam.
+# A Application raiz (kubernetes/bootstrap/root-app.yaml.j2) sobrescreve estes valores.
+repoURL: https://github.com/bernats-homelab/2026-kubernetes
+targetRevision: main
+
+tailscaleOperator:
+  # false apenas no CI (sem tailnet): remove o operator e os Ingress do Tailscale.
+  enabled: true
+
+# FONTE ÚNICA das versões de charts. O Ansible lê este arquivo para o helm install
+# inicial do ArgoCD, então bootstrap e self-manage usam sempre a mesma versão.
+charts:
+  argocd:
+    repoURL: https://argoproj.github.io/argo-helm
+    chart: argo-cd
+    version: 10.11.6
+  tailscaleOperator:
+    repoURL: https://pkgs.tailscale.com/helmcharts
+    chart: tailscale-operator
+    version: 1.104.2

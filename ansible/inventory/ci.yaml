@@ -1,0 +1,7 @@
+# Usado apenas pelo job e2e do CI: o próprio runner vira o nó k3s.
+all:
+  children:
+    k3s_server:
+      hosts:
+        ci:
+          ansible_connection: local

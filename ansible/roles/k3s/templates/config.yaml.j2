@@ -1,0 +1,5 @@
+# Gerenciado pelo Ansible (2026-kubernetes)
+write-kubeconfig-mode: "0600"
+disable:
+  - traefik
+tls-san: {{ k3s_tls_sans | to_json }}

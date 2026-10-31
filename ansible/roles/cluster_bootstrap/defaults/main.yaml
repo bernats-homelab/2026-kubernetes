@@ -1,0 +1,4 @@
+cluster_bootstrap_kubeconfig: /etc/rancher/k3s/k3s.yaml
+cluster_bootstrap_workdir: /var/lib/k3s-bootstrap
+cluster_bootstrap_repo_root: "{{ playbook_dir }}/.."
+cluster_bootstrap_argocd_chart: "{{ apps_values.charts.argocd }}"

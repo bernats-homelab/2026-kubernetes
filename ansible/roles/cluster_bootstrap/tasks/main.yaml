@@ -1,0 +1,101 @@
+# Em check mode num host sem k3s ainda não há API para consultar.
+- name: Bootstrap do cluster
+  when: not ansible_check_mode or k3s_installed_version | default('') | length > 0
+  module_defaults:
+    group/kubernetes.core.k8s:
+      kubeconfig: "{{ cluster_bootstrap_kubeconfig }}"
+  block:
+    - name: Criar namespaces de bootstrap
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: "{{ item }}"
+        state: present
+      loop: [argocd, tailscale]
+
+    # Criado antes do ArgoCD para o operator subir já com credenciais.
+    - name: Criar Secret OAuth do Tailscale Operator
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: operator-oauth
+            namespace: tailscale
+          type: Opaque
+          # `data` (e não stringData) para o módulo comparar e manter idempotência.
+          data:
+            client_id: "{{ tailscale_oauth_client_id | b64encode }}"
+            client_secret: "{{ tailscale_oauth_client_secret | b64encode }}"
+      no_log: true
+
+    - name: Verificar se o release do ArgoCD já existe
+      ansible.builtin.command: helm status argocd --namespace argocd
+      environment:
+        KUBECONFIG: "{{ cluster_bootstrap_kubeconfig }}"
+      register: cluster_bootstrap_argocd_status
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Criar diretório de trabalho do bootstrap
+      ansible.builtin.file:
+        path: "{{ cluster_bootstrap_workdir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Copiar values do ArgoCD
+      ansible.builtin.copy:
+        src: "{{ cluster_bootstrap_repo_root }}/kubernetes/values/argocd.yaml"
+        dest: "{{ cluster_bootstrap_workdir }}/argocd-values.yaml"
+        mode: "0600"
+
+    # Instala só se ausente: depois disso o ArgoCD gerencia a si mesmo
+    # (kubernetes/apps/templates/argocd.yaml) com a mesma versão de chart.
+    - name: Instalar ArgoCD
+      ansible.builtin.command:
+        argv:
+          - helm
+          - install
+          - argocd
+          - "{{ cluster_bootstrap_argocd_chart.chart }}"
+          - --repo
+          - "{{ cluster_bootstrap_argocd_chart.repoURL }}"
+          - --version
+          - "{{ cluster_bootstrap_argocd_chart.version }}"
+          - --namespace
+          - argocd
+          - --values
+          - "{{ cluster_bootstrap_workdir }}/argocd-values.yaml"
+          - --wait
+          - --timeout
+          - 10m
+      environment:
+        KUBECONFIG: "{{ cluster_bootstrap_kubeconfig }}"
+      when: cluster_bootstrap_argocd_status.rc != 0
+      changed_when: true
+
+    - name: Aguardar CRD Application
+      kubernetes.core.k8s_info:
+        api_version: apiextensions.k8s.io/v1
+        kind: CustomResourceDefinition
+        name: applications.argoproj.io
+        wait: true
+        wait_condition:
+          type: Established
+        wait_timeout: 300
+      when: not ansible_check_mode
+
+    - name: Aplicar Application raiz (app-of-apps)
+      kubernetes.core.k8s:
+        state: present
+        template: "{{ cluster_bootstrap_repo_root }}/kubernetes/bootstrap/root-app.yaml.j2"
+      # Em check mode sem ArgoCD instalado o CRD ainda não existe.
+      when: not ansible_check_mode or cluster_bootstrap_argocd_status.rc == 0
+
+    - name: Mostrar como acessar o ArgoCD
+      ansible.builtin.debug:
+        msg:
+          - "Senha inicial do admin: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+          - "UI: https://argocd.<sua-tailnet> (via Tailscale Operator)"

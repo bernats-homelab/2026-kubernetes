@@ -1,0 +1,10 @@
+profile: production
+offline: true
+exclude_paths:
+  - .github/
+  - kubernetes/
+  - .cache/
+kinds:
+  - playbook: "ansible/*.yaml"
+  - vars: "ansible/group_vars/**/*.yaml"
+  - yaml: "ansible/inventory/*.yaml"

@@ -1,0 +1,3 @@
+# O repo é editado no Windows mas tudo roda em Linux (WSL, notebook, CI).
+* text=auto eol=lf
+*.png binary

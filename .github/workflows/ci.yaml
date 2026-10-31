@@ -1,0 +1,97 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANSIBLE_CONFIG: ${{ github.workspace }}/ansible/ansible.cfg
+  ANSIBLE_FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Ferramentas da máquina de controle
+        run: ./scripts/setup-control-node.sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pre-commit
+            .cache/kubeconform
+          key: lint-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: pre-commit (mesma config do WSL)
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  render:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Ferramentas da máquina de controle
+        run: ./scripts/setup-control-node.sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: helm lint + unittest
+        run: make test-unit
+      - name: Render + kubeconform/kube-linter (inclui charts upstream)
+        run: make test-render
+
+  e2e:
+    needs: [lint, render]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Ferramentas da máquina de controle
+        run: ./scripts/setup-control-node.sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Chave age efêmera + segredos dummy: exercita o caminho real de descriptografia
+      # sem nenhum segredo verdadeiro no CI.
+      - name: Segredos dummy criptografados com chave efêmera
+        working-directory: ${{ runner.temp }}
+        run: |
+          age-keygen -o ci.agekey 2>/dev/null
+          printf 'tailscale_oauth_client_id: ci-dummy\ntailscale_oauth_client_secret: ci-dummy\n' > ci.sops.yaml
+          sops --encrypt --age "$(age-keygen -y ci.agekey)" --in-place ci.sops.yaml
+          echo "SOPS_AGE_KEY_FILE=${{ runner.temp }}/ci.agekey" >> "$GITHUB_ENV"
+
+      - name: Bootstrap (1ª execução)
+        working-directory: ansible
+        run: >-
+          ansible-playbook site.yaml -i inventory/ci.yaml
+          -e tailscale_enabled=false
+          -e secrets_file=${{ runner.temp }}/ci.sops.yaml
+          -e git_revision=${{ github.event.pull_request.head.sha || github.sha }}
+          -e git_repo_url=https://github.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+      - name: Idempotência (2ª execução sem mudanças)
+        working-directory: ansible
+        run: >-
+          ../scripts/assert-idempotent.sh site.yaml -i inventory/ci.yaml
+          -e tailscale_enabled=false
+          -e secrets_file=${{ runner.temp }}/ci.sops.yaml
+          -e git_revision=${{ github.event.pull_request.head.sha || github.sha }}
+          -e git_repo_url=https://github.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}
+
+      - name: Asserções do cluster
+        run: ./scripts/e2e-assert.sh
+
+      - name: Diagnóstico
+        if: failure()
+        run: |
+          sudo k3s kubectl get nodes,pods -A -o wide || true
+          sudo k3s kubectl -n argocd get applications -o yaml || true
+          sudo journalctl -u k3s --no-pager -n 200 || true
+
+      - name: Reset remove o k3s
+        working-directory: ansible
+        run: |
+          ansible-playbook reset.yaml -i inventory/ci.yaml -e reset_confirm=yes
+          test ! -e /usr/local/bin/k3s

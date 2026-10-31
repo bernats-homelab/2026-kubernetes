@@ -1,0 +1,103 @@
+suite: applications
+templates:
+  - templates/argocd.yaml
+  - templates/tailscale-operator.yaml
+  - templates/hello-world.yaml
+tests:
+  - it: toda Application tem sync automático com prune e selfHeal
+    asserts:
+      - isKind:
+          of: Application
+      - equal:
+          path: spec.syncPolicy.automated.prune
+          value: true
+      - equal:
+          path: spec.syncPolicy.automated.selfHeal
+          value: true
+      - equal:
+          path: metadata.namespace
+          value: argocd
+
+  - it: sync-waves seguem a ordem operator -> argocd -> workloads
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "0"
+        template: templates/tailscale-operator.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "1"
+        template: templates/argocd.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/hello-world.yaml
+
+  - it: Application do ArgoCD não tem finalizer (não se auto-apaga)
+    template: templates/argocd.yaml
+    asserts:
+      - notExists:
+          path: metadata.finalizers
+
+  - it: versão do chart do ArgoCD vem do values (fonte única)
+    template: templates/argocd.yaml
+    set:
+      charts.argocd.version: 9.9.9
+    asserts:
+      - equal:
+          path: spec.sources[0].targetRevision
+          value: 9.9.9
+      - equal:
+          path: spec.sources[0].chart
+          value: argo-cd
+
+  - it: repoURL e targetRevision propagam para as fontes do repo
+    set:
+      repoURL: https://github.com/example/fork
+      targetRevision: abc123
+    asserts:
+      - equal:
+          path: spec.source.repoURL
+          value: https://github.com/example/fork
+        template: templates/hello-world.yaml
+      - equal:
+          path: spec.source.targetRevision
+          value: abc123
+        template: templates/hello-world.yaml
+      - equal:
+          path: spec.sources[1].repoURL
+          value: https://github.com/example/fork
+        template: templates/argocd.yaml
+      - equal:
+          path: spec.sources[1].targetRevision
+          value: abc123
+        template: templates/argocd.yaml
+
+  - it: com Tailscale ligado usa overlay tailscale e expõe o ArgoCD
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: templates/tailscale-operator.yaml
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/hello-world/overlays/tailscale
+        template: templates/hello-world.yaml
+      - equal:
+          path: spec.sources[0].helm.valuesObject.server.ingress.ingressClassName
+          value: tailscale
+        template: templates/argocd.yaml
+
+  - it: com Tailscale desligado (CI) remove operator e Ingress
+    set:
+      tailscaleOperator.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/tailscale-operator.yaml
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/hello-world/base
+        template: templates/hello-world.yaml
+      - notExists:
+          path: spec.sources[0].helm.valuesObject
+        template: templates/argocd.yaml

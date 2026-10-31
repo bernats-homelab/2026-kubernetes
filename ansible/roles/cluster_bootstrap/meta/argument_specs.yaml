@@ -1,0 +1,24 @@
+argument_specs:
+  main:
+    short_description: Segredos iniciais, ArgoCD e Application raiz
+    options:
+      git_repo_url:
+        type: str
+        required: true
+      git_revision:
+        type: str
+        required: true
+      tailscale_enabled:
+        type: bool
+        required: true
+      apps_values:
+        type: dict
+        required: true
+      tailscale_oauth_client_id:
+        type: str
+        required: true
+        no_log: true
+      tailscale_oauth_client_secret:
+        type: str
+        required: true
+        no_log: true

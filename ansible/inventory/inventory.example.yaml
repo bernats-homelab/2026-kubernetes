@@ -1,0 +1,9 @@
+# Copie para ansible/inventory/local.yaml (ignorado pelo git) e preencha.
+# Use o nome curto do MagicDNS, não o FQDN *.ts.net.
+all:
+  children:
+    k3s_server:
+      hosts:
+        notebook:
+          ansible_host: <hostname-magicdns>
+          ansible_user: <usuario>

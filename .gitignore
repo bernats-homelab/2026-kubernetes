@@ -1,0 +1,21 @@
+# Inventário real (hostname/usuário do notebook) — nunca versionar
+ansible/inventory/*
+!ansible/inventory/inventory.example.yaml
+!ansible/inventory/ci.yaml
+
+# Segredos descriptografados e chaves
+*.dec.yaml
+*.decrypted.*
+keys.txt
+*.agekey
+
+# Kubeconfigs (contêm o nome da tailnet e credenciais)
+kubeconfig
+kubeconfig*.yaml
+kubeconfig*.yml
+*.kubeconfig
+
+# Ferramentas
+.venv/
+.cache/
+*.retry

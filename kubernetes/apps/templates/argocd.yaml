@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  # Sem finalizer de propósito: apagar esta Application não pode apagar o próprio ArgoCD.
+spec:
+  project: default
+  sources:
+    - repoURL: {{ .Values.charts.argocd.repoURL }}
+      chart: {{ .Values.charts.argocd.chart }}
+      targetRevision: {{ .Values.charts.argocd.version | quote }}
+      helm:
+        releaseName: argocd
+        valueFiles:
+          - $values/kubernetes/values/argocd.yaml
+        {{- if .Values.tailscaleOperator.enabled }}
+        valuesObject:
+          server:
+            ingress:
+              enabled: true
+              ingressClassName: tailscale
+              hostname: argocd
+              tls: true
+        {{- end }}
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
