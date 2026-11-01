@@ -1,0 +1,23 @@
+# immich-photos: External Library (somente leitura). immich-data: thumbnails,
+# previews, transcodes e backups do banco. Em base ficam em local-path (CI).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-photos
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-data
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi

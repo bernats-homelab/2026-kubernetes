@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world; do
+for app in root argocd hello-world cloudnative-pg immich-database immich; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -34,4 +34,15 @@ if [[ "${message}" != "olá do KSOPS" ]]; then
   echo "ERRO: hello-world-demo.message inesperado: '${message}'" >&2
   exit 1
 fi
+echo "==> Postgres do Immich (CNPG) pronto com as extensões"
+kubectl -n immich wait cluster.postgresql.cnpg.io/immich-database --for=condition=Ready --timeout=600s
+kubectl -n immich wait database.postgresql.cnpg.io/immich-database --for=jsonpath='{.status.applied}'=true --timeout=300s
+
+echo "==> Immich responde /api/server/ping"
+kubectl -n immich rollout status deployment/immich-server --timeout=600s
+ping="$(kubectl get --raw /api/v1/namespaces/immich/services/immich-server:http/proxy/api/server/ping)"
+grep -q '"res":"pong"' <<<"${ping}" || {
+  echo "ERRO: resposta inesperada do Immich: ${ping}" >&2
+  exit 1
+}
 echo "OK: e2e passou."

@@ -1,0 +1,12 @@
+# Banco do Immich (CloudNativePG + VectorChord) e as PVCs que o chart usa.
+# base = CI (tudo em local-path); overlays/nas = PVCs nos PVs NFS do NAS.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: immich
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: immich
+resources:
+  - database-cluster.yaml
+  - database.yaml
+  - pvcs.yaml

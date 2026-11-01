@@ -91,6 +91,8 @@ jobs:
           sudo k3s kubectl get nodes,pods -A -o wide || true
           sudo k3s kubectl -n argocd get applications -o yaml || true
           sudo k3s kubectl -n argocd logs deploy/argocd-repo-server --all-containers --tail=100 || true
+          sudo k3s kubectl -n immich get cluster,database,pvc,pods -o wide || true
+          sudo k3s kubectl -n immich logs deploy/immich-server --tail=100 || true
           sudo journalctl -u k3s --no-pager -n 200 || true
 
       - name: Reset remove o k3s

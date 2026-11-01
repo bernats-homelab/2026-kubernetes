@@ -18,6 +18,8 @@ spec:
         targetRevision: {{ git_revision | to_json }}
         tailscaleOperator:
           enabled: {{ tailscale_enabled | bool | to_json }}
+        nasStorage:
+          enabled: {{ nas_storage_enabled | bool | to_json }}
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

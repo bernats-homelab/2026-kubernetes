@@ -7,6 +7,26 @@ configs:
   cm:
     # Habilita o generator KSOPS (exec KRM function) nas Applications kustomize.
     kustomize.buildOptions: --enable-alpha-plugins --enable-exec
+    # Health real das Applications filhas: sem isso as sync-waves do app-of-apps
+    # não esperam (p. ex.) o operator do CNPG ficar Healthy antes do Cluster.
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil and obj.status.health ~= nil then
+        hs.status = obj.status.health.status
+        if obj.status.health.message ~= nil then
+          hs.message = obj.status.health.message
+        end
+      end
+      return hs
+  repositories:
+    # Charts Helm via OCI (sem credenciais: repositório público).
+    immich-charts:
+      name: immich-charts
+      type: helm
+      url: ghcr.io/immich-app/immich-charts
+      enableOCI: "true"
 dex:
   enabled: false
 notifications:

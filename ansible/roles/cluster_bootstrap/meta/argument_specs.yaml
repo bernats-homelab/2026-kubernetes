@@ -11,6 +11,9 @@ argument_specs:
       tailscale_enabled:
         type: bool
         required: true
+      nas_storage_enabled:
+        type: bool
+        required: true
       apps_values:
         type: dict
         required: true

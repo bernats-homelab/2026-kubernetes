@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudnative-pg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: {{ .Values.charts.cloudnativePg.repoURL }}
+      chart: {{ .Values.charts.cloudnativePg.chart }}
+      targetRevision: {{ .Values.charts.cloudnativePg.version | quote }}
+      helm:
+        releaseName: cloudnative-pg
+        valueFiles:
+          - $values/kubernetes/values/cloudnative-pg.yaml
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # CRDs do CNPG passam do limite de annotation do client-side apply.
+      - ServerSideApply=true

@@ -1,0 +1,8 @@
+# Values do chart cloudnative-pg (operator). Os Clusters ficam nos workloads
+# (kubernetes/workloads/immich/base/database-cluster.yaml).
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

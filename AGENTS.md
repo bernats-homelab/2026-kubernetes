@@ -7,7 +7,7 @@
 
 # Estrutura do Repositório
 
-- `ansible/`: `site.yaml` (preflight → base → power → tailscale_check → k3s → cluster_bootstrap → kubeconfig) e `reset.yaml`
+- `ansible/`: `site.yaml` (preflight → base → power → tailscale_check → k3s → cluster_bootstrap → nas_storage → kubeconfig) e `reset.yaml`
 - `kubernetes/apps/`: chart app-of-apps; `values.yaml` é a FONTE ÚNICA das versões de charts (o Ansible também lê)
 - `kubernetes/workloads/<app>/{base,overlays/tailscale}`: `base` é usado no CI (sem Tailscale)
 - `docs/adr/NNN-*.md`: decisões de arquitetura
@@ -22,6 +22,8 @@
 - Mudança de versão de chart: só em `kubernetes/apps/values.yaml`
 - Segredos de apps: `*.sops.yaml` ao lado do app + generator KSOPS; criptografe no caminho final (o `.sops.yaml` escolhe os destinatários). Nunca use a chave de teste do CI (`tests/ci-age.key`, pública) fora de `kubernetes/workloads/hello-world/`
 - Segredos do bootstrap (`ansible/secrets/`) são só da chave do WSL
+- O NAS (openmediavault) é configurado pela UI dele: NUNCA criar tasks que alterem o NAS. O role `nas_storage` só verifica os exports e cria os PVs; hostname e paths do NAS ficam no `local.yaml`
+- Imagens do Immich/Postgres por digest; a versão do Immich fica em `kubernetes/values/immich.yaml` (o chart não acompanha as releases)
 
 # Testes
 

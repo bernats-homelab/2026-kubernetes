@@ -3,6 +3,9 @@ templates:
   - templates/argocd.yaml
   - templates/tailscale-operator.yaml
   - templates/hello-world.yaml
+  - templates/cloudnative-pg.yaml
+  - templates/immich-database.yaml
+  - templates/immich.yaml
 tests:
   - it: toda Application tem sync automático com prune e selfHeal
     asserts:
@@ -32,6 +35,18 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "2"
         template: templates/hello-world.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "0"
+        template: templates/cloudnative-pg.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/immich-database.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+        template: templates/immich.yaml
 
   - it: Application do ArgoCD não tem finalizer (não se auto-apaga)
     template: templates/argocd.yaml
@@ -101,3 +116,61 @@ tests:
       - notExists:
           path: spec.sources[0].helm.valuesObject
         template: templates/argocd.yaml
+
+  - it: Immich usa o chart OCI sem o prefixo oci:// (formato do ArgoCD)
+    template: templates/immich.yaml
+    asserts:
+      - equal:
+          path: spec.sources[0].repoURL
+          value: ghcr.io/immich-app/immich-charts
+      - equal:
+          path: spec.sources[0].chart
+          value: immich
+
+  - it: versões dos charts do Immich e do CNPG vêm do values (fonte única)
+    set:
+      charts.immich.version: 9.9.9
+      charts.cloudnativePg.version: 8.8.8
+    asserts:
+      - equal:
+          path: spec.sources[0].targetRevision
+          value: 9.9.9
+        template: templates/immich.yaml
+      - equal:
+          path: spec.sources[0].targetRevision
+          value: 8.8.8
+        template: templates/cloudnative-pg.yaml
+
+  - it: com NAS o banco do Immich usa o overlay que vincula os PVs NFS
+    template: templates/immich-database.yaml
+    asserts:
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/immich/overlays/nas
+
+  - it: sem NAS (CI) o banco do Immich usa base (local-path)
+    template: templates/immich-database.yaml
+    set:
+      nasStorage.enabled: false
+    asserts:
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/immich/base
+
+  - it: Immich exposto como "fotos" só com Tailscale
+    template: templates/immich.yaml
+    asserts:
+      - equal:
+          path: spec.sources[0].helm.valuesObject.server.ingress.main.className
+          value: tailscale
+      - equal:
+          path: spec.sources[0].helm.valuesObject.server.ingress.main.hosts[0].host
+          value: fotos
+
+  - it: sem Tailscale (CI) o Immich não tem Ingress
+    template: templates/immich.yaml
+    set:
+      tailscaleOperator.enabled: false
+    asserts:
+      - notExists:
+          path: spec.sources[0].helm.valuesObject

@@ -5,6 +5,10 @@ git_revision: main
 # false apenas no CI: pula a verificação do Tailscale do host e o Tailscale Operator
 tailscale_enabled: true
 
+# true só no notebook (ansible/inventory/local.yaml): verifica os exports NFS do NAS
+# e cria os PVs do Immich. No CI o Immich usa local-path.
+nas_storage_enabled: false
+
 # Segredos criptografados com SOPS; descriptografados no controller
 secrets_file: "{{ playbook_dir }}/secrets/secrets.sops.yaml"
 

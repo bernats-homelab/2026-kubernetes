@@ -1,0 +1,75 @@
+# Values do chart immich (OCI ghcr.io/immich-app/immich-charts, versão em kubernetes/apps/values.yaml).
+# O banco (CNPG) e as PVCs vêm de kubernetes/workloads/immich; o Ingress "fotos" é
+# adicionado em kubernetes/apps/templates/immich.yaml quando o Tailscale está ligado.
+controllers:
+  main:
+    containers:
+      main:
+        image:
+          # O chart não acompanha as releases do Immich: versão fixada aqui, por digest.
+          tag: v3.3.5@sha256:485d546a2e31d6a8b4db8423fcba5c109de8c218d93410af115fd1ccfc4352a6
+
+immich:
+  persistence:
+    # /data: thumbnails, previews, transcodes e backups do banco (export rw no NAS).
+    library:
+      existingClaim: immich-data
+  # Arquivo de configuração gerenciado pelo git: as telas de ajuste da UI ficam
+  # somente leitura e tudo que não está aqui usa o padrão do Immich.
+  configuration:
+    machineLearning:
+      # Sem reconhecimento facial/busca semântica por enquanto (CPU do notebook).
+      enabled: false
+    ffmpeg:
+      # Só transcodifica o que o navegador não toca; HEVC (celular) passa direto.
+      transcode: required
+      acceptedVideoCodecs: [h264, hevc]
+    backup:
+      database:
+        # pg_dump diário em /data/backups (no NAS): o Postgres vive no disco do notebook.
+        enabled: true
+        cronExpression: "0 3 * * *"
+        keepLastAmount: 14
+    library:
+      # Sem watch (NFS), fotos novas do NAS aparecem no próximo scan: a cada 2h,
+      # no minuto 30, longe do backup do banco (3h00).
+      scan:
+        enabled: true
+        cronExpression: "30 */2 * * *"
+      # inotify não enxerga mudanças feitas no NAS por NFS.
+      watch:
+        enabled: false
+
+valkey:
+  enabled: true
+
+machine-learning:
+  enabled: false
+
+server:
+  controllers:
+    main:
+      containers:
+        main:
+          env:
+            # URI completa gerada pelo CloudNativePG (usuário/senha/host do banco "app").
+            DB_URL:
+              valueFrom:
+                secretKeyRef:
+                  name: immich-database-app
+                  key: uri
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 3Gi
+  persistence:
+    # Fotos do NAS como External Library (import path /mnt/nas/fotos na UI).
+    nas-photos:
+      enabled: true
+      type: persistentVolumeClaim
+      existingClaim: immich-photos
+      globalMounts:
+        - path: /mnt/nas/fotos
+          readOnly: true

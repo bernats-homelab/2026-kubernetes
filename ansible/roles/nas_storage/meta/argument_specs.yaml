@@ -1,0 +1,34 @@
+argument_specs:
+  main:
+    short_description: Verifica os exports NFS do NAS (sem alterar o NAS) e cria os PVs do Immich
+    options:
+      nas_storage_host:
+        description: Nome MagicDNS curto do NAS (definido em ansible/inventory/local.yaml)
+        type: str
+        required: true
+      nas_storage_exports:
+        description: Paths exportados pelo OMV
+        type: dict
+        required: true
+        options:
+          photos:
+            description: Export somente leitura com as fotos (External Library)
+            type: str
+            required: true
+          data:
+            description: Export com escrita para thumbnails, previews, transcodes e backups do banco
+            type: str
+            required: true
+      nas_storage_kubeconfig:
+        type: str
+        default: /etc/rancher/k3s/k3s.yaml
+      nas_storage_namespace:
+        type: str
+        default: immich
+      nas_storage_mount_options:
+        type: list
+        elements: str
+        default: [hard, nfsvers=3]
+      nas_storage_capacity:
+        type: dict
+        default: {}

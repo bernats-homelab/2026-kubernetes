@@ -9,7 +9,10 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
                                            └─ ArgoCD (app-of-apps, GitOps deste repo)
                                                ├─ tailscale-operator  → Ingress na tailnet
                                                ├─ argocd (self-managed) → https://argocd.<sua-tailnet>
-                                               └─ hello-world           → https://hello.<sua-tailnet>
+                                               ├─ hello-world           → https://hello.<sua-tailnet>
+                                               ├─ cloudnative-pg        → Postgres do Immich
+                                               └─ immich                → https://fotos.<sua-tailnet>
+                                                    └─ NFS (tailnet) ──▶ NAS openmediavault (fotos ro, immich-data rw)
 ```
 
 ## Garantias de segurança
@@ -68,6 +71,48 @@ sops ansible/secrets/secrets.sops.yaml   # preencha client id/secret do OAuth cl
 Se o arquivo já existir em texto claro, criptografe com `sops --encrypt --in-place ...`. O hook `sops-encrypted` impede o commit de um arquivo descriptografado.
 
 Preencha também `sops_age_cluster_key` com a chave privada age do cluster, que o KSOPS usa. Gere com `age-keygen` e coloque a chave pública correspondente no `.sops.yaml`, na regra de `kubernetes/`.
+
+## Immich (fotos do NAS)
+
+O Immich exibe, **somente leitura**, as fotos e vídeos do NAS como External Library. Os dados que ele gera (thumbnails, previews, transcodes e dumps diários do banco) ficam numa pasta própria no NAS. O Postgres fica no disco do notebook. Veja o [ADR 005](docs/adr/005-immich-nas-nfs.md).
+
+### 1. NAS: exports NFS no OMV (uma vez, pela UI do openmediavault)
+
+O playbook **nunca** altera o NAS; ele só confere o que você configurou aqui.
+
+1. **Services → NFS → Settings**: marque *Enabled*, clique em *Save* e aplique as mudanças (banner amarelo).
+2. **Storage → Shared Folders**: crie a pasta `immich-data` no disco com espaço (o Immich vai gravar de ~12 a 70 GB nela). A pasta das fotos já deve existir.
+3. Descubra o UID/GID do dono dos arquivos, para o squash. Por exemplo, em **Users → Users** veja o UID do seu usuário (normalmente `1000`); o grupo `users` do OMV é o GID `100`.
+4. **Services → NFS → Shares → Create**, duas vezes:
+
+   | Shared folder | Client | Permission | Extra options |
+   |---|---|---|---|
+   | (pasta das fotos) | `<IP Tailscale do notebook>/32` | Read-only | `subtree_check,all_squash,anonuid=<uid>,anongid=<gid>` |
+   | `immich-data` | `<IP Tailscale do notebook>/32` | Read/Write | `subtree_check,all_squash,anonuid=<uid>,anongid=<gid>` |
+
+   Para descobrir o IP Tailscale do notebook, rode `tailscale ip -4` nele. O `all_squash` faz o Immich (que roda como root no container) gravar como o seu usuário.
+5. Aplique as mudanças. Os exports aparecem como `/export/<pasta>`.
+
+### 2. Inventário (`ansible/inventory/local.yaml`)
+
+Preencha as variáveis de `inventory.example.yaml`: `nas_storage_enabled: true`, `nas_storage_host` e `nas_storage_exports.{photos,data}`, que são os paths `/export/...`. Faça isso **antes** do primeiro `make apply` com o Immich. As PVCs são imutáveis, e com `nas_storage_enabled: false` elas seriam criadas em `local-path`.
+
+Depois rode `make plan` e `make apply`. O role `nas_storage` confere os exports com `showmount` e faz uma montagem de teste de cada um, incluindo uma escrita em `immich-data`. Se algo estiver errado no OMV, ele falha antes de criar os PVs.
+
+### 3. Primeiro acesso
+
+1. Abra `https://fotos.<sua-tailnet>` e crie o usuário admin.
+2. Em **Administration → External Libraries → Create**, adicione o import path `/mnt/nas/fotos` e clique em *Scan*.
+
+As configurações do servidor vêm de `kubernetes/values/immich.yaml` (`immich.configuration`), e as telas de ajuste da UI ficam somente leitura. Para mudar algo (ligar o ML, o horário do scan), altere o arquivo e faça push.
+
+### Backup e restauração do banco
+
+O Immich faz um `pg_dump` diário em `immich-data/backups` no NAS e mantém 14 cópias. Para restaurar num cluster recriado:
+```bash
+gunzip -c <dump>.sql.gz | kubectl -n immich exec -i immich-database-1 -- psql -U postgres -d postgres
+```
+O dump é um `pg_dumpall` e já recria o banco `app`. Rode isso com o `immich-server` parado (`kubectl -n immich scale deploy/immich-server --replicas=0`). Depois volte o `replicas` para 1. O procedimento completo está na documentação do Immich, em *Backup and Restore*.
 
 ## Segredos de apps (KSOPS)
 
@@ -137,7 +182,7 @@ O `validate-manifests` baixa os schemas na primeira execução e os guarda em ca
   1. gera uma chave age efêmera com segredos dummy;
   2. roda o `site.yaml` completo com `tailscale_enabled=false`, sincronizando o próprio SHA do PR;
   3. roda o playbook de novo e exige **changed=0**;
-  4. confere que as Applications estão Synced/Healthy, que o hello-world responde e que o Secret demo foi descriptografado pelo KSOPS;
+  4. confere que as Applications estão Synced/Healthy, que o hello-world responde, que o Secret demo foi descriptografado pelo KSOPS, que o Postgres (CNPG + VectorChord) está pronto e que o Immich responde `/api/server/ping`. No CI, o Immich usa `local-path` em vez do NAS;
   5. roda `reset.yaml`.
 
 Recomendado: proteção de branch na `main` exigindo os jobs `lint`, `render` e `e2e`.

@@ -22,6 +22,9 @@
       tags: [k3s]
     - role: cluster_bootstrap
       tags: [cluster]
+    - role: nas_storage
+      when: nas_storage_enabled | bool
+      tags: [nas]
     - role: kubeconfig_export
       when: tailscale_enabled | bool
       tags: [kubeconfig]

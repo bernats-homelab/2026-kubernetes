@@ -19,14 +19,20 @@ chart_field() {
   '
 }
 
+# workload_dirs -> toda kustomization em kubernetes/workloads/<app>/{base,overlays/*}
+workload_dirs() {
+  find "${REPO_ROOT}/kubernetes/workloads" -name kustomization.yaml -printf '%h\n' | sort
+}
+
 render_local() {
   helm template apps "${APPS_CHART}"
   echo "---"
-  helm template apps "${APPS_CHART}" --set tailscaleOperator.enabled=false
-  for dir in base overlays/tailscale; do
+  helm template apps "${APPS_CHART}" --set tailscaleOperator.enabled=false --set nasStorage.enabled=false
+  local dir
+  while read -r dir; do
     echo "---"
-    "${REPO_ROOT}/scripts/kustomize-build.sh" "${REPO_ROOT}/kubernetes/workloads/hello-world/${dir}"
-  done
+    "${REPO_ROOT}/scripts/kustomize-build.sh" "${dir}"
+  done < <(workload_dirs)
 }
 
 render_upstream() {
@@ -36,19 +42,26 @@ render_upstream() {
   trap 'rm -rf "${helm_home}"' RETURN
   export HELM_REPOSITORY_CONFIG="${helm_home}/repositories.yaml"
   export HELM_REPOSITORY_CACHE="${helm_home}/cache"
+  export HELM_REGISTRY_CONFIG="${helm_home}/registry.json"
 
   local key
-  for key in argocd tailscaleOperator; do
+  for key in argocd tailscaleOperator cloudnativePg immich; do
     # Mesmos release names/namespaces das Applications em kubernetes/apps/templates
-    local release namespace
+    local release namespace repo chart
     case "${key}" in
       argocd) release=argocd namespace=argocd ;;
       tailscaleOperator) release=tailscale-operator namespace=tailscale ;;
+      cloudnativePg) release=cloudnative-pg namespace=cnpg-system ;;
+      immich) release=immich namespace=immich ;;
     esac
+    repo="$(chart_field "${key}" repoURL)"
+    chart="$(chart_field "${key}" chart)"
+    # Charts OCI são referenciados direto (oci://registry/path/chart), sem --repo.
+    local source=(--repo "${repo}" "${chart}")
+    [[ "${repo}" == oci://* ]] && source=("${repo}/${chart}")
     echo "---"
-    helm template "${release}" "$(chart_field "${key}" chart)" \
+    helm template "${release}" "${source[@]}" \
       --namespace "${namespace}" \
-      --repo "$(chart_field "${key}" repoURL)" \
       --version "$(chart_field "${key}" version)" \
       --values "${REPO_ROOT}/kubernetes/values/${release}.yaml" \
       --include-crds

@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: immich
+  namespace: argocd
+  annotations:
+    # Depois do banco e das PVCs (immich-database, wave 2).
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # Chart OCI: o ArgoCD quer o registry sem o prefixo oci:// (repositório em kubernetes/values/argocd.yaml).
+    - repoURL: {{ trimPrefix "oci://" .Values.charts.immich.repoURL }}
+      chart: {{ .Values.charts.immich.chart }}
+      targetRevision: {{ .Values.charts.immich.version | quote }}
+      helm:
+        releaseName: immich
+        valueFiles:
+          - $values/kubernetes/values/immich.yaml
+        {{- if .Values.tailscaleOperator.enabled }}
+        valuesObject:
+          server:
+            ingress:
+              main:
+                enabled: true
+                className: tailscale
+                hosts:
+                  - host: fotos
+                    paths:
+                      - path: /
+                        service:
+                          identifier: main
+                tls:
+                  - hosts: [fotos]
+        {{- end }}
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: immich
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

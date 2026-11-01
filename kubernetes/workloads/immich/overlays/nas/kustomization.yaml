@@ -1,0 +1,38 @@
+# Vincula as PVCs aos PVs NFS criados pelo Ansible (role nas_storage), que
+# guardam hostname e paths do NAS fora do repo. PVC é imutável: troque de
+# base para nas antes do primeiro sync (veja o README).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: immich
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: PersistentVolumeClaim
+      name: immich-photos
+    patch: |
+      - op: replace
+        path: /spec/accessModes
+        value: [ReadOnlyMany]
+      - op: replace
+        path: /spec/storageClassName
+        value: ""
+      - op: add
+        path: /spec/volumeName
+        value: immich-photos
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 1Ti
+  - target:
+      kind: PersistentVolumeClaim
+      name: immich-data
+    patch: |
+      - op: replace
+        path: /spec/storageClassName
+        value: ""
+      - op: add
+        path: /spec/volumeName
+        value: immich-data
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 200Gi

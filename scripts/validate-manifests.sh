@@ -26,10 +26,10 @@ kubeconform_args=(
 case "${1:-local}" in
   local)
     "${REPO_ROOT}/scripts/render-manifests.sh" local | kubeconform "${kubeconform_args[@]}" -
-    for dir in base overlays/tailscale; do
-      "${REPO_ROOT}/scripts/kustomize-build.sh" "${REPO_ROOT}/kubernetes/workloads/hello-world/${dir}" |
+    while read -r dir; do
+      "${REPO_ROOT}/scripts/kustomize-build.sh" "${dir}" |
         kube-linter lint --config "${REPO_ROOT}/.kube-linter.yaml" -
-    done
+    done < <(find "${REPO_ROOT}/kubernetes/workloads" -name kustomization.yaml -printf '%h\n' | sort)
     ;;
   upstream)
     # CRDs de terceiros sem schema no catálogo não devem bloquear; os recursos core continuam estritos.

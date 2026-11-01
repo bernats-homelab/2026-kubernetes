@@ -1,0 +1,35 @@
+# Baseado em local/cloudnative-pg.yaml do immich-charts 0.13.4.
+# A extensão vchord entra como image volume (ImageVolume é GA no k8s 1.37).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: immich-database
+  annotations:
+    # CRD vem da Application cloudnative-pg (wave 0).
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  instances: 1
+  # Single-node: um PDB impediria drenar o próprio nó.
+  enablePDB: false
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:39add80f5b1e573e2f6b641c66fd1a2f8dede67ca0330e870285bc1078551390
+  storage:
+    # Disco do notebook (local-path). Os dumps diários vão para o NAS (backup do Immich).
+    storageClass: local-path
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  postgresql:
+    shared_preload_libraries:
+      - vchord.so
+    extensions:
+      - name: vchord
+        image:
+          reference: ghcr.io/tensorchord/vchord-scratch:pg18-v1.1.1@sha256:bdea43bed2a414e21bbf71767bf6f0739747ac480b267b51772dc214ac28dcb3
+        dynamic_library_path:
+          - /usr/lib/postgresql/18/lib
+        extension_control_path:
+          - /usr/share/postgresql/18/

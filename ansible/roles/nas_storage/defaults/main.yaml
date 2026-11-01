@@ -1,0 +1,10 @@
+nas_storage_kubeconfig: /etc/rancher/k3s/k3s.yaml
+nas_storage_namespace: immich
+# Mesmas opções usadas no teste de montagem e nos PVs. NFSv3 porque o OMV exporta
+# /export como raiz NFSv4 (fsid=0): em v4 o path seria relativo e não bateria com o
+# que o showmount lista. Em v3 o path do showmount é exatamente o que o PV monta.
+nas_storage_mount_options: [hard, nfsvers=3]
+# Informativo para o Kubernetes (NFS não impõe cota).
+nas_storage_capacity:
+  photos: 1Ti
+  data: 200Gi
