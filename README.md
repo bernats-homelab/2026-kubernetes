@@ -80,6 +80,8 @@ Se o arquivo já existir em texto claro, criptografe com `sops --encrypt --in-pl
 
 Fluxo normal: `make plan` → revisar o diff → `make apply`.
 
+Por padrão os targets pedem a senha do sudo (`--ask-become-pass`). Se o sudo do notebook não pede senha (`NOPASSWD`), passe `ASK_BECOME_PASS=0`, por exemplo `make apply ASK_BECOME_PASS=0`.
+
 ```bash
 export KUBECONFIG=~/.kube/notebook.yaml
 kubectl -n argocd get applications

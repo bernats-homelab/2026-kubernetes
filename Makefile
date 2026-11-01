@@ -7,7 +7,10 @@ SHELL := /usr/bin/env bash
 export ANSIBLE_CONFIG := $(CURDIR)/ansible/ansible.cfg
 export PATH := $(HOME)/.local/bin:$(PATH)
 
-PLAYBOOK := ansible-playbook --ask-become-pass
+# ASK_BECOME_PASS=0 quando o sudo do notebook não pede senha (NOPASSWD).
+ASK_BECOME_PASS ?= 1
+BECOME_FLAGS := $(if $(filter 1,$(ASK_BECOME_PASS)),--ask-become-pass,)
+PLAYBOOK := ansible-playbook $(BECOME_FLAGS)
 INVENTORY := ansible/inventory/local.yaml
 
 .PHONY: help deps lint test-unit test-render test check-inventory plan apply idempotency kubeconfig reset
@@ -41,7 +44,7 @@ apply: check-inventory lint ## Aplica no notebook (roda lint antes)
 	cd ansible && $(PLAYBOOK) site.yaml
 
 idempotency: check-inventory ## Reaplica e falha se algo mudar
-	cd ansible && ../scripts/assert-idempotent.sh site.yaml --ask-become-pass
+	cd ansible && ../scripts/assert-idempotent.sh site.yaml $(BECOME_FLAGS)
 
 kubeconfig: check-inventory ## Atualiza ~/.kube/notebook.yaml
 	cd ansible && $(PLAYBOOK) site.yaml --tags kubeconfig

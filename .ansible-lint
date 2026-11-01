@@ -4,6 +4,7 @@ exclude_paths:
   - .github/
   - kubernetes/
   - .cache/
+  - ansible/secrets/*.sops.yaml # gerado pelo sops; validado pelo hook sops-encrypted
 kinds:
   - playbook: "ansible/*.yaml"
   - vars: "ansible/group_vars/**/*.yaml"
