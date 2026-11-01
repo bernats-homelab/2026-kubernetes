@@ -1,0 +1,11 @@
+# PVCs do Immich, sincronizadas pela mesma Application que as monta (o local-path
+# só vincula a PVC quando um pod a usa: WaitForFirstConsumer).
+# base = CI (local-path); overlays/nas = PVs NFS do NAS.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: immich
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: immich
+resources:
+  - pvcs.yaml

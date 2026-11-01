@@ -12,8 +12,8 @@ spec:
   source:
     repoURL: {{ .Values.repoURL }}
     targetRevision: {{ .Values.targetRevision }}
-    # Postgres (CNPG) + PVCs. overlays/nas vincula as PVCs aos PVs NFS do Ansible.
-    path: kubernetes/workloads/immich/{{ ternary "overlays/nas" "base" .Values.nasStorage.enabled }}
+    # Só o Postgres (CNPG): fica Healthy sozinho. As PVCs vão na Application immich.
+    path: kubernetes/workloads/immich/database
   destination:
     server: https://kubernetes.default.svc
     namespace: immich

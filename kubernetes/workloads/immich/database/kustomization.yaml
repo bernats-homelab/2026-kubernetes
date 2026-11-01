@@ -1,5 +1,5 @@
-# Banco do Immich (CloudNativePG + VectorChord) e as PVCs que o chart usa.
-# base = CI (tudo em local-path); overlays/nas = PVCs nos PVs NFS do NAS.
+# Banco do Immich: CloudNativePG + VectorChord, no disco do notebook (local-path).
+# As PVCs do Immich ficam em ../storage, junto da Application que as monta.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: immich
@@ -9,4 +9,3 @@ labels:
 resources:
   - database-cluster.yaml
   - database.yaml
-  - pvcs.yaml

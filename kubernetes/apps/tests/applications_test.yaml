@@ -141,21 +141,30 @@ tests:
           value: 8.8.8
         template: templates/cloudnative-pg.yaml
 
-  - it: com NAS o banco do Immich usa o overlay que vincula os PVs NFS
-    template: templates/immich-database.yaml
-    asserts:
-      - equal:
-          path: spec.source.path
-          value: kubernetes/workloads/immich/overlays/nas
-
-  - it: sem NAS (CI) o banco do Immich usa base (local-path)
+  - it: banco do Immich não depende do toggle de NAS (só o Postgres)
     template: templates/immich-database.yaml
     set:
       nasStorage.enabled: false
     asserts:
       - equal:
           path: spec.source.path
-          value: kubernetes/workloads/immich/base
+          value: kubernetes/workloads/immich/database
+
+  - it: PVCs vão na Application do Immich (quem as monta), com NAS no overlay nas
+    template: templates/immich.yaml
+    asserts:
+      - equal:
+          path: spec.sources[2].path
+          value: kubernetes/workloads/immich/storage/overlays/nas
+
+  - it: sem NAS (CI) as PVCs do Immich usam base (local-path)
+    template: templates/immich.yaml
+    set:
+      nasStorage.enabled: false
+    asserts:
+      - equal:
+          path: spec.sources[2].path
+          value: kubernetes/workloads/immich/storage/base
 
   - it: Immich exposto como "fotos" só com Tailscale
     template: templates/immich.yaml
