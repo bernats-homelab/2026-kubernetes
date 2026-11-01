@@ -3,6 +3,7 @@ extends: default
 ignore: |
   kubernetes/apps/templates/
   *.j2
+  *.sops.yaml
 
 rules:
   line-length:
