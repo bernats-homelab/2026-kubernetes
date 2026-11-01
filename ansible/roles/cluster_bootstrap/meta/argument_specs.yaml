@@ -22,3 +22,8 @@ argument_specs:
         type: str
         required: true
         no_log: true
+      sops_age_cluster_key:
+        description: Chave privada age (AGE-SECRET-KEY-1...) que o KSOPS usa no repo-server do ArgoCD
+        type: str
+        required: true
+        no_log: true

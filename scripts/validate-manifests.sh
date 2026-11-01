@@ -27,7 +27,7 @@ case "${1:-local}" in
   local)
     "${REPO_ROOT}/scripts/render-manifests.sh" local | kubeconform "${kubeconform_args[@]}" -
     for dir in base overlays/tailscale; do
-      kustomize build "${REPO_ROOT}/kubernetes/workloads/hello-world/${dir}" |
+      "${REPO_ROOT}/scripts/kustomize-build.sh" "${REPO_ROOT}/kubernetes/workloads/hello-world/${dir}" |
         kube-linter lint --config "${REPO_ROOT}/.kube-linter.yaml" -
     done
     ;;

@@ -1,6 +1,6 @@
 # 002 — Segredos com SOPS + age, descriptografados pelo Ansible
 
-- **Status:** aceito
+- **Status:** aceito; segredos dos apps evoluíram para KSOPS em [004](004-ksops.md)
 - **Data:** 2026-10-31
 
 ## Contexto

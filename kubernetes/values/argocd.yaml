@@ -4,7 +4,45 @@ configs:
   params:
     # TLS termina no proxy do Tailscale Operator
     server.insecure: true
+  cm:
+    # Habilita o generator KSOPS (exec KRM function) nas Applications kustomize.
+    kustomize.buildOptions: --enable-alpha-plugins --enable-exec
 dex:
   enabled: false
 notifications:
   enabled: false
+
+# KSOPS: descriptografa *.sops.yaml no render, com a chave age do cluster
+# (Secret argocd/sops-age, criado pelo Ansible antes do ArgoCD). Veja docs/adr/004-ksops.md.
+repoServer:
+  env:
+    - name: SOPS_AGE_KEY_FILE
+      value: /sops-age/keys.txt
+  initContainers:
+    - name: install-ksops
+      image: viaductoss/ksops:v4.5.1@sha256:4def9fdd4e2f850265740ebe9592c5455d19b76891e88e602df8b52d74b95334
+      command: [/usr/local/bin/ksops, install, --with-kustomize, /custom-tools]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      volumeMounts:
+        - name: custom-tools
+          mountPath: /custom-tools
+  volumes:
+    - name: custom-tools
+      emptyDir: {}
+    - name: sops-age
+      secret:
+        secretName: sops-age
+  volumeMounts:
+    # Só o ksops: o kustomize continua o que vem na imagem do ArgoCD.
+    - name: custom-tools
+      mountPath: /usr/local/bin/ksops
+      subPath: ksops
+    - name: sops-age
+      mountPath: /sops-age
+      readOnly: true

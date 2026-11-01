@@ -16,7 +16,7 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
 
 - **Sem lockout.** O playbook nunca mexe no Tailscale, no SSH, no firewall ou na rede do host. O role `tailscale_check` só lê o status, e o hook `no-lockout` barra qualquer task que tente alterar essas coisas.
 - **Nada identificável no repo.** O inventário real fica em `ansible/inventory/local.yaml` (ignorado pelo git e barrado por hook). O nome da tailnet (`*.ts.net`) é descoberto em runtime e barrado pelo gitleaks. Os kubeconfigs ficam em `~/.kube/`.
-- **Segredos com SOPS + age.** A chave privada fica só no WSL. O Ansible descriptografa no controller e cria os Secrets com `no_log` (veja [ADR 002](docs/adr/002-sops-age-secrets.md)).
+- **Segredos com SOPS + age.** A chave privada fica só no WSL. O Ansible descriptografa no controller e cria os Secrets do bootstrap com `no_log` (veja [ADR 002](docs/adr/002-sops-age-secrets.md)). Os segredos dos apps são commitados criptografados ao lado do app, e o ArgoCD os descriptografa com KSOPS usando uma chave age própria do cluster (veja [ADR 004](docs/adr/004-ksops.md)).
 - **Tampa fechada na energia não suspende.** O role `power` configura o `systemd-logind` (`HandleLidSwitchExternalPower=ignore` e `HandleLidSwitchDocked=ignore`) e confere via D-Bus que o valor efetivo foi aplicado. Na bateria continua valendo o padrão do sistema (suspender).
 - **Versões fixadas com sha256** para k3s (instalador), helm, kubectl, sops, age, kubeconform, kube-linter e kustomize. A imagem do hello-world é fixada por digest.
 - **Uma fonte por versão.** As versões dos charts ficam só em [kubernetes/apps/values.yaml](kubernetes/apps/values.yaml), que o Ansible também lê no bootstrap.
@@ -67,6 +67,26 @@ sops ansible/secrets/secrets.sops.yaml   # preencha client id/secret do OAuth cl
 
 Se o arquivo já existir em texto claro, criptografe com `sops --encrypt --in-place ...`. O hook `sops-encrypted` impede o commit de um arquivo descriptografado.
 
+Preencha também `sops_age_cluster_key` com a chave privada age do cluster, que o KSOPS usa. Gere com `age-keygen` e coloque a chave pública correspondente no `.sops.yaml`, na regra de `kubernetes/`.
+
+## Segredos de apps (KSOPS)
+
+1. Crie o Secret em texto claro ao lado do app, por exemplo `kubernetes/workloads/<app>/base/<nome>.sops.yaml`, e criptografe **no lugar**:
+   ```bash
+   sops encrypt --in-place kubernetes/workloads/<app>/base/<nome>.sops.yaml
+   ```
+   O `.sops.yaml` escolhe os destinatários pelo caminho (WSL + cluster) e criptografa só `data`/`stringData`.
+2. Declare um generator KSOPS na kustomization. O modelo é [secret-generator.yaml](kubernetes/workloads/hello-world/base/secret-generator.yaml):
+   ```yaml
+   generators:
+     - secret-generator.yaml
+   ```
+3. Commit e push. O ArgoCD descriptografa no render e aplica o Secret.
+
+Para editar depois, use `sops kubernetes/workloads/<app>/base/<nome>.sops.yaml`. No pre-commit e no CI, que não têm chave, o `scripts/ksops-stub.py` faz o papel do KSOPS: gera o Secret com valores placeholder só para validar a estrutura.
+
+A chave `tests/ci-age.key` é **pública** e só serve para o demo do hello-world rodar no e2e. O hook `sops-encrypted` barra qualquer outro arquivo criptografado para ela.
+
 ## Uso
 
 | Comando | O que faz |
@@ -98,7 +118,7 @@ Depois do bootstrap, tudo dentro do cluster é **GitOps**: altere `kubernetes/` 
 |---|---|
 | `trailing-whitespace`, `end-of-file-fixer`, `mixed-line-ending`, `check-yaml`, `check-json`, `check-merge-conflict`, `detect-private-key` | Higiene básica e LF |
 | `gitleaks` (+ regras `AGE-SECRET-KEY` e `*.ts.net`) | Nenhum segredo nem o nome da tailnet no repo |
-| `sops-encrypted` | Todo `*.sops.yaml` está criptografado |
+| `sops-encrypted` | Todo `*.sops.yaml` está criptografado (só `apiVersion`/`kind`/`metadata`/`type` podem ficar em claro, via `unencrypted_regex`); a chave pública de teste do CI não é usada fora do demo |
 | `no-local-inventory`, `no-kubeconfig` | Hostname/usuário e kubeconfigs não são commitados |
 | `no-lockout` | Nenhuma task altera Tailscale, SSH, firewall ou rede do host |
 | `yamllint --strict`, `ansible-lint` (profile `production`) | Qualidade de YAML/Ansible, FQCN, `changed_when`, permissões |
@@ -117,7 +137,7 @@ O `validate-manifests` baixa os schemas na primeira execução e os guarda em ca
   1. gera uma chave age efêmera com segredos dummy;
   2. roda o `site.yaml` completo com `tailscale_enabled=false`, sincronizando o próprio SHA do PR;
   3. roda o playbook de novo e exige **changed=0**;
-  4. confere que as Applications estão Synced/Healthy e que o hello-world responde;
+  4. confere que as Applications estão Synced/Healthy, que o hello-world responde e que o Secret demo foi descriptografado pelo KSOPS;
   5. roda `reset.yaml`.
 
 Recomendado: proteção de branch na `main` exigindo os jobs `lint`, `render` e `e2e`.
@@ -136,6 +156,7 @@ kubernetes/apps/      Helm chart app-of-apps (Applications do ArgoCD) + testes
 kubernetes/values/    values dos charts upstream
 kubernetes/workloads/ manifests (kustomize) dos workloads
 kubernetes/bootstrap/ Application raiz (template renderizado pelo Ansible)
-scripts/              setup do controle e checagens usadas pelo pre-commit/CI
+scripts/              setup do controle e checagens usadas pelo pre-commit/CI (inclui o stub do KSOPS)
+tests/ci-age.key      chave age PÚBLICA de teste do CI (só o demo do hello-world)
 docs/adr/             decisões de arquitetura
 ```

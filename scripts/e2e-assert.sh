@@ -28,4 +28,10 @@ grep -q '^Hostname: hello-world-' <<<"${body}" || {
   echo "${body}" >&2
   exit 1
 }
+echo "==> KSOPS: Secret do demo descriptografado pelo ArgoCD"
+message="$(kubectl -n hello-world get secret hello-world-demo -o jsonpath='{.data.message}' | base64 -d)"
+if [[ "${message}" != "olá do KSOPS" ]]; then
+  echo "ERRO: hello-world-demo.message inesperado: '${message}'" >&2
+  exit 1
+fi
 echo "OK: e2e passou."

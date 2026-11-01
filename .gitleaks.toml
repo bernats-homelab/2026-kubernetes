@@ -14,3 +14,10 @@ id = "tailnet-name"
 description = "Nome da tailnet (*.ts.net) identifica a rede privada; é descoberto em runtime"
 regex = '''[a-z0-9-]+\.ts\.net'''
 keywords = ["ts.net"]
+
+# Chave de teste do CI: pública de propósito (só descriptografa o demo do hello-world).
+# O hook sops-encrypted impede que ela seja destinatária de qualquer outro arquivo.
+[[allowlists]]
+description = "Chave age pública de teste do CI"
+targetRules = ["age-private-key", "age-secret-key", "generic-api-key"]
+paths = ['''^tests/ci-age\.key$''']

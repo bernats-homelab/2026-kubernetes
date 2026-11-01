@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Renderiza manifests para validação (stdout, multi-documento).
-#   render-manifests.sh local     -> chart app-of-apps (Tailscale on/off) + kustomize dos workloads (offline)
+#   render-manifests.sh local     -> chart app-of-apps (Tailscale on/off) + kustomize dos workloads (offline, KSOPS via stub)
 #   render-manifests.sh upstream  -> charts upstream (argo-cd, tailscale-operator) com nossos values (precisa de rede)
 set -euo pipefail
 
@@ -25,7 +25,7 @@ render_local() {
   helm template apps "${APPS_CHART}" --set tailscaleOperator.enabled=false
   for dir in base overlays/tailscale; do
     echo "---"
-    kustomize build "${REPO_ROOT}/kubernetes/workloads/hello-world/${dir}"
+    "${REPO_ROOT}/scripts/kustomize-build.sh" "${REPO_ROOT}/kubernetes/workloads/hello-world/${dir}"
   done
 }
 

@@ -32,6 +32,21 @@
             client_secret: "{{ tailscale_oauth_client_secret | b64encode }}"
       no_log: true
 
+    # Montado pelo repo-server do ArgoCD (KSOPS): precisa existir antes do pod subir.
+    - name: Criar Secret com a chave age do cluster (KSOPS)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: sops-age
+            namespace: argocd
+          type: Opaque
+          data:
+            keys.txt: "{{ (sops_age_cluster_key ~ '\n') | b64encode }}"
+      no_log: true
+
     - name: Verificar se o release do ArgoCD já existe
       ansible.builtin.command: helm status argocd --namespace argocd
       register: cluster_bootstrap_argocd_status

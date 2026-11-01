@@ -20,6 +20,8 @@
 - Variáveis registradas/definidas em roles levam o prefixo do role (ansible-lint `production`)
 - Todo `command`/`shell` tem `changed_when`/`creates`; o e2e exige changed=0 na segunda execução
 - Mudança de versão de chart: só em `kubernetes/apps/values.yaml`
+- Segredos de apps: `*.sops.yaml` ao lado do app + generator KSOPS; criptografe no caminho final (o `.sops.yaml` escolhe os destinatários). Nunca use a chave de teste do CI (`tests/ci-age.key`, pública) fora de `kubernetes/workloads/hello-world/`
+- Segredos do bootstrap (`ansible/secrets/`) são só da chave do WSL
 
 # Testes
 

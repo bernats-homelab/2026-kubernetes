@@ -53,12 +53,14 @@ jobs:
         run: ./scripts/setup-control-node.sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # Chave age efêmera + segredos dummy: exercita o caminho real de descriptografia
-      # sem nenhum segredo verdadeiro no CI.
+      # sem nenhum segredo verdadeiro no CI. A chave do cluster (KSOPS) é a de teste
+      # do repo (tests/ci-age.key, pública), única que descriptografa o demo do hello-world.
       - name: Segredos dummy criptografados com chave efêmera
         working-directory: ${{ runner.temp }}
         run: |
           age-keygen -o ci.agekey 2>/dev/null
           printf 'tailscale_oauth_client_id: ci-dummy\ntailscale_oauth_client_secret: ci-dummy\n' > ci.sops.yaml
+          printf 'sops_age_cluster_key: %s\n' "$(grep '^AGE-SECRET-KEY-' "${{ github.workspace }}/tests/ci-age.key")" >> ci.sops.yaml
           sops --encrypt --age "$(age-keygen -y ci.agekey)" --in-place ci.sops.yaml
           echo "SOPS_AGE_KEY_FILE=${{ runner.temp }}/ci.agekey" >> "$GITHUB_ENV"
 
@@ -88,6 +90,7 @@ jobs:
         run: |
           sudo k3s kubectl get nodes,pods -A -o wide || true
           sudo k3s kubectl -n argocd get applications -o yaml || true
+          sudo k3s kubectl -n argocd logs deploy/argocd-repo-server --all-containers --tail=100 || true
           sudo journalctl -u k3s --no-pager -n 200 || true
 
       - name: Reset remove o k3s
