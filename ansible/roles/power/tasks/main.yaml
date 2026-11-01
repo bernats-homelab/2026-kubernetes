@@ -1,0 +1,45 @@
+- name: Criar diretório de drop-ins do logind
+  ansible.builtin.file:
+    path: /etc/systemd/logind.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configurar ação da tampa na energia
+  ansible.builtin.copy:
+    dest: /etc/systemd/logind.conf.d/90-k3s-lid.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Gerenciado pelo Ansible (2026-kubernetes)
+      [Login]
+      HandleLidSwitchExternalPower={{ power_lid_switch_external_power }}
+      HandleLidSwitchDocked={{ power_lid_switch_docked }}
+  notify: Recarregar systemd-logind
+
+- name: Aplicar recarga do logind antes de verificar
+  ansible.builtin.meta: flush_handlers
+
+- name: Ler configuração efetiva do logind
+  ansible.builtin.command: >-
+    busctl get-property org.freedesktop.login1 /org/freedesktop/login1
+    org.freedesktop.login1.Manager {{ item }}
+  loop:
+    - HandleLidSwitchExternalPower
+    - HandleLidSwitchDocked
+  register: power_logind_effective
+  changed_when: false
+  check_mode: false
+
+- name: Garantir que o logind aplicou a configuração da tampa
+  ansible.builtin.assert:
+    that:
+      - power_logind_effective.results[0].stdout == 's "' ~ power_lid_switch_external_power ~ '"'
+      - power_logind_effective.results[1].stdout == 's "' ~ power_lid_switch_docked ~ '"'
+    fail_msg: >-
+      logind reporta {{ power_logind_effective.results | map(attribute='stdout') | list }};
+      esperado {{ power_lid_switch_external_power }}/{{ power_lid_switch_docked }}.
+  # Em check mode a configuração ainda não foi gravada nem recarregada.
+  when: not ansible_check_mode

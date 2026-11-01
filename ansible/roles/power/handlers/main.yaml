@@ -1,0 +1,4 @@
+# SIGHUP faz o logind reler a configuração sem reiniciar: sessões (SSH e gráfica) continuam.
+- name: Recarregar systemd-logind
+  ansible.builtin.command: systemctl kill --kill-whom=main --signal=SIGHUP systemd-logind.service
+  changed_when: true

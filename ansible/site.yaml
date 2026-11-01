@@ -13,6 +13,8 @@
       tags: [preflight, always]
     - role: base
       tags: [base]
+    - role: power
+      tags: [power]
     - role: tailscale_check
       when: tailscale_enabled | bool
       tags: [tailscale, always]

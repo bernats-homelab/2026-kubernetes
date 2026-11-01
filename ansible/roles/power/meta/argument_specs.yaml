@@ -1,0 +1,12 @@
+argument_specs:
+  main:
+    short_description: Notebook não suspende/desliga ao fechar a tampa quando ligado na energia
+    options:
+      power_lid_switch_external_power:
+        type: str
+        choices: [ignore, lock, suspend, poweroff, hibernate]
+        default: ignore
+      power_lid_switch_docked:
+        type: str
+        choices: [ignore, lock, suspend, poweroff, hibernate]
+        default: ignore

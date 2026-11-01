@@ -7,7 +7,7 @@
 
 # Estrutura do Repositório
 
-- `ansible/`: `site.yaml` (preflight → base → tailscale_check → k3s → cluster_bootstrap → kubeconfig) e `reset.yaml`
+- `ansible/`: `site.yaml` (preflight → base → power → tailscale_check → k3s → cluster_bootstrap → kubeconfig) e `reset.yaml`
 - `kubernetes/apps/`: chart app-of-apps; `values.yaml` é a FONTE ÚNICA das versões de charts (o Ansible também lê)
 - `kubernetes/workloads/<app>/{base,overlays/tailscale}`: `base` é usado no CI (sem Tailscale)
 - `docs/adr/NNN-*.md`: decisões de arquitetura

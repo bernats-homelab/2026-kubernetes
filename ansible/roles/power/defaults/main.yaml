@@ -1,0 +1,4 @@
+# Na tomada (ou dock) fechar a tampa não faz nada; na bateria vale o padrão do
+# sistema (HandleLidSwitch=suspend), para não drenar a bateria com a tampa fechada.
+power_lid_switch_external_power: ignore
+power_lid_switch_docked: ignore
