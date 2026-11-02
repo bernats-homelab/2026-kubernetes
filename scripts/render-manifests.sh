@@ -27,7 +27,14 @@ workload_dirs() {
 render_local() {
   helm template apps "${APPS_CHART}"
   echo "---"
-  helm template apps "${APPS_CHART}" --set tailscaleOperator.enabled=false --set nasStorage.enabled=false
+  helm template apps "${APPS_CHART}" --set tailscaleOperator.enabled=false --set nasStorage.enabled=false \
+    --set smokeApp.enabled=true
+  echo "---"
+  # Uma app externa de exemplo, para validar o template de Application (apps: {} por padrão)
+  helm template apps "${APPS_CHART}" \
+    --set apps.exemplo.repoURL=https://github.com/bernats-homelab/exemplo \
+    --set apps.exemplo.targetRevision=v1.0.0 \
+    --show-only templates/external-apps.yaml
   local dir
   while read -r dir; do
     echo "---"

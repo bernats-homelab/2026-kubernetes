@@ -20,6 +20,8 @@ spec:
           enabled: {{ tailscale_enabled | bool | to_json }}
         nasStorage:
           enabled: {{ nas_storage_enabled | bool | to_json }}
+        smokeApp:
+          enabled: {{ external_apps_smoke_enabled | bool | to_json }}
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

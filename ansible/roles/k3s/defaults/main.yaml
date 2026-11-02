@@ -1,2 +1,4 @@
 k3s_tls_sans: "{{ ([tailscale_check_dns_name] + tailscale_check_ips) if (tailscale_enabled | bool) else [] }}"
 k3s_install_script: "/usr/local/lib/k3s-install-{{ k3s_version }}.sh"
+# registries.yaml com auth do ghcr.io só quando há token nos segredos (ansible/secrets).
+k3s_ghcr_auth_enabled: "{{ ghcr_pull_token | default('') | length > 0 }}"

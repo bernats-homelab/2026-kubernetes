@@ -14,6 +14,9 @@ argument_specs:
       nas_storage_enabled:
         type: bool
         required: true
+      external_apps_smoke_enabled:
+        type: bool
+        required: true
       apps_values:
         type: dict
         required: true
@@ -29,4 +32,17 @@ argument_specs:
         description: Chave privada age (AGE-SECRET-KEY-1...) que o KSOPS usa no repo-server do ArgoCD
         type: str
         required: true
+        no_log: true
+      argocd_github_app_id:
+        description: ID da GitHub App com que o ArgoCD lê os repos privados da org (vazio = sem credencial, como no CI)
+        type: str
+        default: ""
+      argocd_github_app_installation_id:
+        description: ID da instalação da GitHub App na org bernats-homelab
+        type: str
+        default: ""
+      argocd_github_app_private_key:
+        description: Chave privada (PEM) da GitHub App
+        type: str
+        default: ""
         no_log: true
