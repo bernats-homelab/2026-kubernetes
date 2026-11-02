@@ -1,0 +1,141 @@
+suite: external-apps
+templates:
+  - templates/external-apps.yaml
+  - templates/appproject-homelab-apps.yaml
+tests:
+  - it: sem apps e sem smoke não gera Application
+    template: templates/external-apps.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: cada entrada de apps vira uma Application no AppProject homelab-apps, fixada na tag
+    template: templates/external-apps.yaml
+    set:
+      apps:
+        alpha:
+          repoURL: https://github.com/bernats-homelab/alpha
+          targetRevision: v1.2.3
+        beta:
+          repoURL: https://github.com/bernats-homelab/beta-app
+          targetRevision: v0.1.0
+          namespace: beta-ns
+          syncWave: "4"
+    asserts:
+      - hasDocuments:
+          count: 2
+      - isKind:
+          of: Application
+      - equal:
+          path: spec.project
+          value: homelab-apps
+      - equal:
+          path: metadata.namespace
+          value: argocd
+      - equal:
+          path: spec.syncPolicy.automated.prune
+          value: true
+      - equal:
+          path: spec.syncPolicy.automated.selfHeal
+          value: true
+      - contains:
+          path: metadata.finalizers
+          content: resources-finalizer.argocd.argoproj.io
+      - equal:
+          path: metadata.name
+          value: alpha
+        documentIndex: 0
+      - equal:
+          path: spec.source.targetRevision
+          value: v1.2.3
+        documentIndex: 0
+      - equal:
+          path: spec.source.path
+          value: deploy/overlays/tailscale
+        documentIndex: 0
+      - equal:
+          path: spec.destination.namespace
+          value: alpha
+        documentIndex: 0
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        documentIndex: 0
+      - equal:
+          path: spec.source.repoURL
+          value: https://github.com/bernats-homelab/beta-app
+        documentIndex: 1
+      - equal:
+          path: spec.destination.namespace
+          value: beta-ns
+        documentIndex: 1
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "4"
+        documentIndex: 1
+
+  - it: sem Tailscale (CI) apps externas usam deploy/base
+    template: templates/external-apps.yaml
+    set:
+      tailscaleOperator.enabled: false
+      apps:
+        alpha:
+          repoURL: https://github.com/bernats-homelab/alpha
+          targetRevision: v1.2.3
+    asserts:
+      - equal:
+          path: spec.source.path
+          value: deploy/base
+
+  - it: smoke app (CI) sincroniza o template na tag do values
+    template: templates/external-apps.yaml
+    set:
+      smokeApp.enabled: true
+      tailscaleOperator.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: k8s-app-smoke
+      - equal:
+          path: spec.source.repoURL
+          value: https://github.com/bernats-homelab/repotpl-k8s-app
+      - equal:
+          path: spec.destination.namespace
+          value: k8s-app-smoke
+      - equal:
+          path: spec.project
+          value: homelab-apps
+
+  - it: AppProject só aceita repos da org, nada cluster-scoped além de Namespace
+    template: templates/appproject-homelab-apps.yaml
+    asserts:
+      - isKind:
+          of: AppProject
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "-1"
+      - equal:
+          path: spec.sourceRepos
+          value: [https://github.com/bernats-homelab/*]
+      - equal:
+          path: spec.clusterResourceWhitelist
+          value:
+            - group: ""
+              kind: Namespace
+      - contains:
+          path: spec.destinations
+          content:
+            server: https://kubernetes.default.svc
+            namespace: "!argocd"
+      - contains:
+          path: spec.destinations
+          content:
+            server: https://kubernetes.default.svc
+            namespace: "!kube-system"
+      - contains:
+          path: spec.destinations
+          content:
+            server: https://kubernetes.default.svc
+            namespace: "!immich"

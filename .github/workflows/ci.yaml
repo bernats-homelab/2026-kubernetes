@@ -69,6 +69,7 @@ jobs:
         run: >-
           ansible-playbook site.yaml -i inventory/ci.yaml
           -e tailscale_enabled=false
+          -e external_apps_smoke_enabled=true
           -e secrets_file=${{ runner.temp }}/ci.sops.yaml
           -e git_revision=${{ github.event.pull_request.head.sha || github.sha }}
           -e git_repo_url=https://github.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -78,6 +79,7 @@ jobs:
         run: >-
           ../scripts/assert-idempotent.sh site.yaml -i inventory/ci.yaml
           -e tailscale_enabled=false
+          -e external_apps_smoke_enabled=true
           -e secrets_file=${{ runner.temp }}/ci.sops.yaml
           -e git_revision=${{ github.event.pull_request.head.sha || github.sha }}
           -e git_repo_url=https://github.com/${{ github.event.pull_request.head.repo.full_name || github.repository }}
@@ -93,6 +95,7 @@ jobs:
           sudo k3s kubectl -n argocd logs deploy/argocd-repo-server --all-containers --tail=100 || true
           sudo k3s kubectl -n immich get cluster,database,pvc,pods -o wide || true
           sudo k3s kubectl -n immich logs deploy/immich-server --tail=100 || true
+          sudo k3s kubectl -n k8s-app-smoke get all -o wide || true
           sudo journalctl -u k3s --no-pager -n 200 || true
 
       - name: Reset remove o k3s

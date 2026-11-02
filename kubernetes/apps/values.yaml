@@ -12,6 +12,24 @@ nasStorage:
   # false (CI): PVCs em local-path.
   enabled: true
 
+# Apps de outros repos da org, criados a partir de bernats-homelab/repotpl-k8s-app.
+# Cada entrada vira uma Application no AppProject homelab-apps que sincroniza deploy/
+# do repo na tag fixada aqui (como as versões dos charts). Nova versão = PR trocando
+# targetRevision; o job de release do repo da app mostra o trecho pronto.
+#   <nome>:                  # nome da Application e, por padrão, do namespace
+#     repoURL: https://github.com/bernats-homelab/<repo>
+#     targetRevision: vX.Y.Z
+#     namespace: <ns>        # opcional
+#     syncWave: "2"          # opcional
+apps: {}
+
+# O próprio template como app externa, ligado só no CI (Ansible external_apps_smoke_enabled):
+# o e2e prova o caminho repo externo -> AppProject -> Application. Use uma tag publicada.
+smokeApp:
+  enabled: false
+  repoURL: https://github.com/bernats-homelab/repotpl-k8s-app
+  targetRevision: v0.1.0
+
 # FONTE ÚNICA das versões de charts. O Ansible lê este arquivo para o helm install
 # inicial do ArgoCD, então bootstrap e self-manage usam sempre a mesma versão.
 charts:

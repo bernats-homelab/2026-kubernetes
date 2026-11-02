@@ -1,0 +1,37 @@
+{{- /*
+Apps de outros repos da org (bernats-homelab/repotpl-k8s-app), declaradas em `apps`
+no values.yaml. O repo da app tem os kustomize em deploy/; aqui só fica a Application,
+fixada numa tag. Veja docs/adr/007-external-apps.md.
+*/}}
+{{- $apps := deepCopy .Values.apps }}
+{{- if .Values.smokeApp.enabled }}
+{{- $_ := set $apps "k8s-app-smoke" (pick .Values.smokeApp "repoURL" "targetRevision") }}
+{{- end }}
+{{- range $name, $app := $apps }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ $app.syncWave | default "2" | quote }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Restrito a repos da org e a recursos namespaced (templates/appproject-homelab-apps.yaml).
+  project: homelab-apps
+  source:
+    repoURL: {{ $app.repoURL }}
+    targetRevision: {{ $app.targetRevision }}
+    path: deploy/{{ ternary "overlays/tailscale" "base" $.Values.tailscaleOperator.enabled }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $app.namespace | default $name }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

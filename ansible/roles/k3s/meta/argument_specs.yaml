@@ -11,3 +11,12 @@ argument_specs:
       tailscale_enabled:
         type: bool
         required: true
+      ghcr_pull_username:
+        description: Usuário do GitHub dono do PAT de pull do GHCR
+        type: str
+        default: ""
+      ghcr_pull_token:
+        description: PAT classic só com read:packages (vazio = sem registries.yaml, como no CI)
+        type: str
+        default: ""
+        no_log: true

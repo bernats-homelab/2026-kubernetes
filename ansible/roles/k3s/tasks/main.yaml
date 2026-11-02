@@ -26,6 +26,32 @@
     mode: "0600"
   notify: Reiniciar k3s
 
+# Pull das imagens privadas do GHCR (apps externas da org) sem imagePullSecret por app.
+# Sem token nos segredos (CI), o arquivo não existe.
+- name: Configurar credencial do ghcr.io no k3s
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/registries.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Gerenciado pelo Ansible (2026-kubernetes)
+      configs:
+        ghcr.io:
+          auth:
+            username: {{ ghcr_pull_username | to_json }}
+            password: {{ ghcr_pull_token | to_json }}
+  no_log: true
+  when: k3s_ghcr_auth_enabled | bool
+  notify: Reiniciar k3s
+
+- name: Remover credencial do ghcr.io do k3s
+  ansible.builtin.file:
+    path: /etc/rancher/k3s/registries.yaml
+    state: absent
+  when: not (k3s_ghcr_auth_enabled | bool)
+  notify: Reiniciar k3s
+
 - name: Baixar instalador do k3s (versão e checksum fixados)
   ansible.builtin.get_url:
     url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_version | urlencode }}/install.sh"

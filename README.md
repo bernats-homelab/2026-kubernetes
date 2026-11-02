@@ -11,8 +11,10 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
                                                ├─ argocd (self-managed) → https://argocd.<sua-tailnet>
                                                ├─ hello-world           → https://hello.<sua-tailnet>
                                                ├─ cloudnative-pg        → Postgres do Immich
-                                               └─ immich                → https://fotos.<sua-tailnet>
-                                                    └─ NFS (tailnet) ──▶ NAS openmediavault (fotos ro, immich-data rw)
+                                               ├─ immich                → https://fotos.<sua-tailnet>
+                                               │    └─ NFS (tailnet) ──▶ NAS openmediavault (fotos ro, immich-data rw)
+                                               └─ apps: (outros repos da org, AppProject homelab-apps)
+                                                    └─ bernats-homelab/<app> @ vX.Y.Z → deploy/ → https://<app>.<sua-tailnet>
 ```
 
 ## Garantias de segurança
@@ -149,6 +151,41 @@ Para editar depois, use `sops kubernetes/workloads/<app>/base/<nome>.sops.yaml`.
 
 A chave `tests/ci-age.key` é **pública** e só serve para o demo do hello-world rodar no e2e. O hook `sops-encrypted` barra qualquer outro arquivo criptografado para ela.
 
+## Apps de outros repos
+
+Apps próprias ficam em repos separados da org, gerados a partir do template [bernats-homelab/repotpl-k8s-app](https://github.com/bernats-homelab/repotpl-k8s-app). O repo da app tem código, `Dockerfile` e kustomize em `deploy/`. Aqui fica só a Application, fixada numa tag, como fazemos com as versões dos charts (veja o [ADR 007](docs/adr/007-external-apps.md)).
+
+### Publicar uma app
+
+1. No repo da app, siga o README do template: `scripts/init.sh <nome>` e depois *Actions → release* com `vX.Y.Z`.
+2. Aqui, abra um PR com a app em [kubernetes/apps/values.yaml](kubernetes/apps/values.yaml). O resumo do job de release mostra o trecho pronto:
+   ```yaml
+   apps:
+     <nome>:
+       repoURL: https://github.com/bernats-homelab/<repo>
+       targetRevision: v0.1.0
+   ```
+3. Depois do merge, o ArgoCD cria o namespace `<nome>` e sincroniza `deploy/overlays/tailscale`, que fica em `https://<nome>.<sua-tailnet>`.
+
+Para uma versão nova, rode o release no repo da app e abra o PR trocando o `targetRevision`. O `values.schema.json` só aceita repos `bernats-homelab/*` e tags `vX.Y.Z`.
+
+As Applications rodam no AppProject `homelab-apps`. Ele não permite recursos cluster-scoped (fora `Namespace`) nem os namespaces do sistema e da plataforma. O e2e sincroniza o próprio template (`smokeApp`, Ansible `external_apps_smoke_enabled=true`) para cobrir esse caminho.
+
+### Repos e imagens privados (uma vez)
+
+1. **GitHub App** (org → *Settings → Developer settings → GitHub Apps → New*):
+   - *Repository permissions → Contents: Read-only*, sem webhook;
+   - instale na org em *All repositories*. A credencial vale para todo repo com o prefixo `https://github.com/bernats-homelab`, inclusive este;
+   - gere uma *private key*.
+2. **PAT classic** só com `read:packages` (o GHCR não aceita GitHub App nem fine-grained para pull).
+3. Preencha em `sops ansible/secrets/secrets.sops.yaml`:
+   - `argocd_github_app_id`, `argocd_github_app_installation_id` e `argocd_github_app_private_key` (o PEM inteiro);
+   - `ghcr_pull_username` e `ghcr_pull_token`.
+
+   Depois rode `make plan` → `make apply`. O Ansible cria o Secret `argocd/repo-creds-bernats-homelab` e o `/etc/rancher/k3s/registries.yaml`; a criação do `registries.yaml` reinicia o k3s uma vez.
+
+Os dois são opcionais: sem eles, apps de repos públicos com imagens públicas já funcionam.
+
 ## Uso
 
 | Comando | O que faz |
@@ -199,7 +236,7 @@ O `validate-manifests` baixa os schemas na primeira execução e os guarda em ca
   1. gera uma chave age efêmera com segredos dummy;
   2. roda o `site.yaml` completo com `tailscale_enabled=false`, sincronizando o próprio SHA do PR;
   3. roda o playbook de novo e exige **changed=0**;
-  4. confere que as Applications estão Synced/Healthy, que o hello-world responde, que o Secret demo foi descriptografado pelo KSOPS, que o Postgres (CNPG + VectorChord) está pronto e que o Immich responde `/api/server/ping`. No CI, o Immich usa `local-path` em vez do NAS;
+  4. confere que as Applications estão Synced/Healthy, que o hello-world responde, que o Secret demo foi descriptografado pelo KSOPS, que o Postgres (CNPG + VectorChord) está pronto que o Immich responde `/api/server/ping` e que a app externa de smoke (o template `repotpl-k8s-app`, no AppProject `homelab-apps`) responde `/healthz`. No CI, o Immich usa `local-path` em vez do NAS;
   5. roda `reset.yaml`.
 
 Recomendado: proteção de branch na `main` exigindo os jobs `lint`, `render` e `e2e`.

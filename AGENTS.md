@@ -10,6 +10,7 @@
 - `ansible/`: `site.yaml` (preflight → base → power → tailscale_check → k3s → cluster_bootstrap → nas_storage → kubeconfig) e `reset.yaml`
 - `kubernetes/apps/`: chart app-of-apps; `values.yaml` é a FONTE ÚNICA das versões de charts (o Ansible também lê)
 - `kubernetes/workloads/<app>/{base,overlays/tailscale}`: `base` é usado no CI (sem Tailscale)
+- Apps de outros repos da org (template `bernats-homelab/repotpl-k8s-app`): só a entrada em `apps:` de `kubernetes/apps/values.yaml`; os kustomize ficam no `deploy/` do repo da app
 - `docs/adr/NNN-*.md`: decisões de arquitetura
 
 # Restrições
@@ -20,6 +21,7 @@
 - Variáveis registradas/definidas em roles levam o prefixo do role (ansible-lint `production`)
 - Todo `command`/`shell` tem `changed_when`/`creates`; o e2e exige changed=0 na segunda execução
 - Mudança de versão de chart: só em `kubernetes/apps/values.yaml`
+- Apps externas sempre por tag `vX.Y.Z` (nunca branch) e no AppProject `homelab-apps`; credencial da GitHub App e do GHCR só em `ansible/secrets/` (opcionais)
 - Segredos de apps: `*.sops.yaml` ao lado do app + generator KSOPS; criptografe no caminho final (o `.sops.yaml` escolhe os destinatários). Nunca use a chave de teste do CI (`tests/ci-age.key`, pública) fora de `kubernetes/workloads/hello-world/`
 - Segredos do bootstrap (`ansible/secrets/`) são só da chave do WSL
 - O NAS (openmediavault) é configurado pela UI dele: NUNCA criar tasks que alterem o NAS. O role `nas_storage` só verifica os exports e cria os PVs; hostname e paths do NAS ficam no `local.yaml`

@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world cloudnative-pg immich-database immich obsidian; do
+for app in root argocd hello-world cloudnative-pg immich-database immich obsidian k8s-app-smoke; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -54,4 +54,17 @@ grep -qi '<html' <<<"${page}" || {
   head -c 500 <<<"${page}" >&2
   exit 1
 }
+
+echo "==> App externa (repotpl-k8s-app) no AppProject homelab-apps responde /healthz"
+project="$(kubectl -n argocd get application/k8s-app-smoke -o jsonpath='{.spec.project}')"
+if [[ "${project}" != "homelab-apps" ]]; then
+  echo "ERRO: k8s-app-smoke está no project '${project}', esperado homelab-apps" >&2
+  exit 1
+fi
+kubectl -n k8s-app-smoke rollout status deployment/app-template --timeout=300s
+health="$(kubectl get --raw /api/v1/namespaces/k8s-app-smoke/services/app-template:http/proxy/healthz)"
+if [[ "${health}" != "ok" ]]; then
+  echo "ERRO: resposta inesperada da app externa: '${health}'" >&2
+  exit 1
+fi
 echo "OK: e2e passou."

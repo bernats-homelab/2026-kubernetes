@@ -9,6 +9,10 @@ tailscale_enabled: true
 # e cria os PVs do Immich. No CI o Immich usa local-path.
 nas_storage_enabled: false
 
+# true só no CI: o ArgoCD sincroniza o próprio template de apps (bernats-homelab/repotpl-k8s-app)
+# como app externa (smokeApp em kubernetes/apps/values.yaml), testando o AppProject homelab-apps.
+external_apps_smoke_enabled: false
+
 # Segredos criptografados com SOPS; descriptografados no controller
 secrets_file: "{{ playbook_dir }}/secrets/secrets.sops.yaml"
 

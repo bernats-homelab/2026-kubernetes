@@ -47,6 +47,29 @@
             keys.txt: "{{ (sops_age_cluster_key ~ '\n') | b64encode }}"
       no_log: true
 
+    # Template de credencial: vale para todo repo com o prefixo da org (apps externas e
+    # este próprio repo). Sem GitHub App nos segredos (CI), não cria. Veja docs/adr/007.
+    - name: Criar credencial do ArgoCD para os repos da org (GitHub App)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: repo-creds-bernats-homelab
+            namespace: argocd
+            labels:
+              argocd.argoproj.io/secret-type: repo-creds
+          type: Opaque
+          data:
+            type: "{{ 'git' | b64encode }}"
+            url: "{{ 'https://github.com/bernats-homelab' | b64encode }}"
+            githubAppID: "{{ argocd_github_app_id | string | b64encode }}"
+            githubAppInstallationID: "{{ argocd_github_app_installation_id | string | b64encode }}"
+            githubAppPrivateKey: "{{ argocd_github_app_private_key | b64encode }}"
+      no_log: true
+      when: argocd_github_app_id | default('') | string | length > 0
+
     - name: Verificar se o release do ArgoCD já existe
       ansible.builtin.command: helm status argocd --namespace argocd
       register: cluster_bootstrap_argocd_status
