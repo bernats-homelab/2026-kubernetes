@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renderiza manifests para validação (stdout, multi-documento).
-#   render-manifests.sh local     -> chart app-of-apps (Tailscale on/off) + kustomize dos workloads (offline, KSOPS via stub)
-#   render-manifests.sh upstream  -> charts upstream (argo-cd, tailscale-operator) com nossos values (precisa de rede)
+#   render-manifests.sh local     -> chart app-of-apps (Tailscale/NAS on/off) + kustomize dos workloads (offline, KSOPS via stub)
+#   render-manifests.sh upstream  -> charts upstream (argo-cd, tailscale-operator, cloudnative-pg, immich) com nossos values (precisa de rede)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

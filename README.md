@@ -177,7 +177,7 @@ O `validate-manifests` baixa os schemas na primeira execução e os guarda em ca
 ### CI ([.github/workflows/ci.yaml](.github/workflows/ci.yaml))
 
 - **lint**: roda o pre-commit em todos os arquivos.
-- **render**: roda `helm unittest` e renderiza os charts upstream (argo-cd, tailscale-operator) com os nossos values, validando tudo com kubeconform.
+- **render**: roda `helm unittest` e renderiza os charts upstream (argo-cd, tailscale-operator, cloudnative-pg, immich) com os nossos values, validando tudo com kubeconform.
 - **e2e**: no runner `ubuntu-26.04`:
   1. gera uma chave age efêmera com segredos dummy;
   2. roda o `site.yaml` completo com `tailscale_enabled=false`, sincronizando o próprio SHA do PR;

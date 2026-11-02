@@ -11,4 +11,4 @@ argument_specs:
       base_packages:
         type: list
         elements: str
-        default: [curl, jq, python3-kubernetes, python3-yaml]
+        default: [curl, jq, nfs-common, python3-kubernetes, python3-yaml]

@@ -30,5 +30,6 @@ argument_specs:
         elements: str
         default: [hard, nfsvers=3]
       nas_storage_capacity:
+        description: Capacidade informativa de cada PV (NFS não impõe cota)
         type: dict
-        default: {}
+        default: {photos: 1Ti, data: 200Gi}
