@@ -7,10 +7,11 @@ all:
         notebook:
           ansible_host: <hostname-magicdns>
           ansible_user: <usuario>
-      vars:
-        # NAS (openmediavault) com os exports NFS do Immich; veja o README.
-        nas_storage_enabled: true
-        nas_storage_host: <hostname-magicdns-do-nas>
-        nas_storage_exports:
-          photos: </export/fotos>
-          data: </export/immich-data>
+          # NAS (openmediavault) com os exports NFS do Immich; veja o README.
+          # Ficam no host, não em `vars:` do grupo: variáveis de grupo do inventário
+          # perdem para ansible/group_vars/all (onde o padrão é false).
+          nas_storage_enabled: true
+          nas_storage_host: <hostname-magicdns-do-nas>
+          nas_storage_exports:
+            photos: </export/fotos>
+            data: </export/immich-data>

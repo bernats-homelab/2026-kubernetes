@@ -1,11 +1,30 @@
 # O NAS é configurado pelo openmediavault (dono da configuração). Este role só
 # VERIFICA os exports a partir do notebook e cria os PVs que apontam para eles.
+- name: Verificar se o cliente NFS (nfs-common) já está instalado
+  ansible.builtin.stat:
+    path: /usr/sbin/showmount
+  register: nas_storage_nfs_client
+
+# No primeiro `make plan` o role base ainda não instalou o nfs-common (check mode
+# não instala nada); a verificação dos exports fica para o apply.
+- name: Exigir o cliente NFS fora do check mode
+  ansible.builtin.assert:
+    that: nas_storage_nfs_client.stat.exists or ansible_check_mode
+    fail_msg: "showmount não encontrado: o role base deveria ter instalado o nfs-common."
+    quiet: true
+
+- name: Avisar que a verificação dos exports fica para o apply
+  ansible.builtin.debug:
+    msg: "nfs-common ainda não instalado: o role base o instala no apply, que então verifica os exports."
+  when: not nas_storage_nfs_client.stat.exists
+
 - name: Listar exports NFS do NAS
   ansible.builtin.command: showmount --no-headers -e {{ nas_storage_host }}
   register: nas_storage_showmount
   changed_when: false
   failed_when: false
   check_mode: false
+  when: nas_storage_nfs_client.stat.exists
 
 - name: Garantir que os exports do Immich existem no NAS
   vars:
@@ -17,8 +36,10 @@
       - nas_storage_exports.data in nas_storage_exported
     fail_msg: >-
       Exports NFS ausentes em {{ nas_storage_host }}
-      (encontrados: {{ nas_storage_exported | default([]) }}; erro: {{ nas_storage_showmount.stderr | default('') }}).
+      (encontrados: {{ nas_storage_exported | default([]) }};
+      erro: {{ nas_storage_showmount.stderr | default('', true) or nas_storage_showmount.msg | default('') }}).
       Crie-os na UI do OpenMediaVault conforme o README (seção "NAS: exports NFS no OMV").
+  when: nas_storage_nfs_client.stat.exists
 
 # Montagem temporária com as mesmas opções dos PVs: pega squash/permissão errados
 # antes de virarem um pod do Immich em CrashLoopBackOff.
@@ -26,7 +47,9 @@
   ansible.builtin.shell: |
     set -euo pipefail
     dir="$(mktemp -d)"
-    trap 'umount "${dir}" 2>/dev/null || true; rmdir "${dir}"' EXIT
+    # Na primeira montagem NFS do host o rpc-statd ainda está subindo e o umount
+    # pode falhar uma vez; tenta de novo antes de remover o diretório.
+    trap 'umount "${dir}" 2>/dev/null || { sleep 2; umount "${dir}"; }; rmdir "${dir}"' EXIT
     mount -t nfs -o "{{ (nas_storage_mount_options + [item.mode]) | join(',') }}" \
       "{{ nas_storage_host }}:{{ item.path }}" "${dir}"
     ls "${dir}" >/dev/null
@@ -43,6 +66,7 @@
     label: "{{ item.name }}: {{ item.path }}"
   changed_when: false
   check_mode: false
+  when: nas_storage_nfs_client.stat.exists
 
 - name: PVs do Immich
   when: not ansible_check_mode or k3s_installed_version | default('') | length > 0

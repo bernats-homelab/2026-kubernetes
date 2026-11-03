@@ -81,7 +81,7 @@ O Immich exibe, **somente leitura**, as fotos e vídeos do NAS como External Lib
 O playbook **nunca** altera o NAS; ele só confere o que você configurou aqui.
 
 1. **Services → NFS → Settings**: marque *Enabled*, clique em *Save* e aplique as mudanças (banner amarelo).
-2. **Storage → Shared Folders**: crie a pasta `immich-data` no disco com espaço (o Immich vai gravar de ~12 a 70 GB nela). A pasta das fotos já deve existir.
+2. **Storage → Shared Folders**: crie a pasta `immich-data` no disco com espaço (o Immich vai gravar de ~12 a 70 GB nela). A pasta das fotos já deve existir. Se as fotos estão espalhadas pelo disco, ela pode ser a shared folder da raiz do disco; nesse caso, veja os import paths no passo 3.
 3. Descubra o UID/GID do dono dos arquivos, para o squash. Por exemplo, em **Users → Users** veja o UID do seu usuário (normalmente `1000`); o grupo `users` do OMV é o GID `100`.
 4. **Services → NFS → Shares → Create**, duas vezes:
 
@@ -103,6 +103,9 @@ Depois rode `make plan` e `make apply`. O role `nas_storage` confere os exports 
 
 1. Abra `https://fotos.<sua-tailnet>` e crie o usuário admin.
 2. Em **Administration → External Libraries → Create**, adicione o import path `/mnt/nas/fotos` e clique em *Scan*.
+   - Se o export de fotos for a raiz do disco, use um import path por subpasta (ex.: `/mnt/nas/fotos/<pasta>`) em vez de `/mnt/nas/fotos`. Assim a própria `immich-data`, que também está no disco, fica de fora; senão o Immich indexaria os thumbnails que ele mesmo gera.
+   - Use *Exclusion patterns* para pular o que não é foto, como backups de sistema (ex.: `**/*backup-windows*/**`, `**/lost+found/**`).
+   - As bibliotecas ficam no banco, não no `immich.configuration`, então são ajustadas pela UI.
 
 As configurações do servidor vêm de `kubernetes/values/immich.yaml` (`immich.configuration`), e as telas de ajuste da UI ficam somente leitura. Para mudar algo (ligar o ML, o horário do scan), altere o arquivo e faça push.
 
