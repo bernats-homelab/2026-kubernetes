@@ -6,6 +6,7 @@ templates:
   - templates/cloudnative-pg.yaml
   - templates/immich-database.yaml
   - templates/immich.yaml
+  - templates/obsidian.yaml
 tests:
   - it: toda Application tem sync automático com prune e selfHeal
     asserts:
@@ -47,6 +48,10 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "3"
         template: templates/immich.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/obsidian.yaml
 
   - it: Application do ArgoCD não tem finalizer (não se auto-apaga)
     template: templates/argocd.yaml
@@ -183,3 +188,26 @@ tests:
     asserts:
       - notExists:
           path: spec.sources[0].helm.valuesObject
+
+  - it: Obsidian com Tailscale usa o overlay (Ingress borbsidian + basic auth) e o vault do NAS
+    template: templates/obsidian.yaml
+    asserts:
+      - equal:
+          path: spec.sources[0].path
+          value: kubernetes/workloads/obsidian/overlays/tailscale
+      - equal:
+          path: spec.sources[1].path
+          value: kubernetes/workloads/obsidian/storage/overlays/nas
+
+  - it: sem Tailscale e sem NAS (CI) o Obsidian usa base nos dois
+    template: templates/obsidian.yaml
+    set:
+      tailscaleOperator.enabled: false
+      nasStorage.enabled: false
+    asserts:
+      - equal:
+          path: spec.sources[0].path
+          value: kubernetes/workloads/obsidian/base
+      - equal:
+          path: spec.sources[1].path
+          value: kubernetes/workloads/obsidian/storage/base

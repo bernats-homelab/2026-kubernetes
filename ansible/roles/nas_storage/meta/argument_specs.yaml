@@ -1,6 +1,6 @@
 argument_specs:
   main:
-    short_description: Verifica os exports NFS do NAS (sem alterar o NAS) e cria os PVs do Immich
+    short_description: Verifica os exports NFS do NAS (sem alterar o NAS) e cria os PVs dos apps
     options:
       nas_storage_host:
         description: Nome MagicDNS curto do NAS (definido em ansible/inventory/local.yaml)
@@ -12,24 +12,54 @@ argument_specs:
         required: true
         options:
           photos:
-            description: Export somente leitura com as fotos (External Library)
+            description: Export somente leitura com as fotos (External Library do Immich)
             type: str
             required: true
           data:
-            description: Export com escrita para thumbnails, previews, transcodes e backups do banco
+            description: Export com escrita para thumbnails, previews, transcodes e backups do banco do Immich
+            type: str
+            required: true
+          obsidian:
+            description: Export com escrita do vault do Obsidian
             type: str
             required: true
       nas_storage_kubeconfig:
         type: str
         default: /etc/rancher/k3s/k3s.yaml
-      nas_storage_namespace:
-        type: str
-        default: immich
       nas_storage_mount_options:
         type: list
         elements: str
         default: [hard, nfsvers=3]
-      nas_storage_capacity:
-        description: Capacidade informativa de cada PV (NFS não impõe cota)
-        type: dict
-        default: {photos: 1Ti, data: 200Gi}
+      nas_storage_volumes:
+        description: Um PV por volume, pré-vinculado à PVC de mesmo nome no namespace do app
+        type: list
+        elements: dict
+        default:
+          - {name: immich-photos, export: photos, namespace: immich, access_mode: ReadOnlyMany, read_only: true, write_test: false, capacity: 1Ti}
+          - {name: immich-data, export: data, namespace: immich, access_mode: ReadWriteOnce, read_only: false, write_test: true, capacity: 200Gi}
+          - {name: obsidian-vault, export: obsidian, namespace: obsidian, access_mode: ReadWriteOnce, read_only: false, write_test: true, capacity: 10Gi}
+        options:
+          name:
+            type: str
+            required: true
+          export:
+            description: Chave em nas_storage_exports
+            type: str
+            required: true
+            choices: [photos, data, obsidian]
+          namespace:
+            type: str
+            required: true
+          access_mode:
+            type: str
+            required: true
+            choices: [ReadOnlyMany, ReadWriteOnce, ReadWriteMany]
+          read_only:
+            type: bool
+            required: true
+          write_test:
+            type: bool
+            required: true
+          capacity:
+            type: str
+            required: true

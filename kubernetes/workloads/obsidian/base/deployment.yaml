@@ -1,0 +1,75 @@
+# Obsidian desktop no navegador (linuxserver/obsidian, Selkies na porta 3000).
+# O vault vem da PVC obsidian-vault (NFS do NAS; local-path no CI) e o estado do
+# app (vault aberto, perfil do Electron) fica em /config, no disco do notebook.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obsidian
+  annotations:
+    # A imagem inicia como root (s6-overlay ajusta /config e troca para o PUID) e
+    # escreve no rootfs; allowPrivilegeEscalation=false segue valendo (sem sudo).
+    ignore-check.kube-linter.io/run-as-non-root: "s6-overlay da linuxserver inicia como root e troca para o PUID"
+    ignore-check.kube-linter.io/no-read-only-root-fs: "s6-overlay e Selkies escrevem no rootfs"
+spec:
+  replicas: 1
+  # Volumes RWO: o pod novo só sobe depois que o antigo solta o vault.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {}
+  template:
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: obsidian
+          image: lscr.io/linuxserver/obsidian:v1.14.5-ls151@sha256:37716e2370ec8e3c6d0aa30f758bd0646916c64cd07d157c15ed8db856398eb1
+          env:
+            # Mesmo dono que o all_squash do export NFS (Bernardo:users).
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "100"
+            - name: TZ
+              value: America/Sao_Paulo
+            - name: TITLE
+              value: borbsidian
+          ports:
+            - name: http
+              containerPort: 3000
+          # TCP e não HTTP: com basic auth (overlay tailscale) o / responde 401.
+          readinessProbe:
+            tcpSocket:
+              port: http
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [NET_RAW]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: vault
+              mountPath: /vaults/borbsidian
+            # Electron precisa de /dev/shm maior que os 64Mi padrão (--shm-size=1gb).
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: obsidian-config
+        - name: vault
+          persistentVolumeClaim:
+            claimName: obsidian-vault
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi

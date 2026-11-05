@@ -1,0 +1,12 @@
+# Estado do app (configuração do Obsidian, perfil do Electron), no disco do notebook.
+# O vault em si fica na PVC obsidian-vault (kubernetes/workloads/obsidian/storage).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-config
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi

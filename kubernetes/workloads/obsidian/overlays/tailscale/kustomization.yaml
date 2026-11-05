@@ -1,0 +1,20 @@
+# Notebook: exposto na tailnet como https://borbsidian.<sua-tailnet>, com basic auth.
+# O segredo fica só aqui porque o CI não descriptografa segredos fora do hello-world.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: obsidian
+resources:
+  - ../../base
+  - ingress.yaml
+generators:
+  - secret-generator.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: obsidian
+    patch: |
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom
+        value:
+          - secretRef:
+              name: obsidian-auth

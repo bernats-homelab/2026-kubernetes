@@ -26,14 +26,14 @@
   check_mode: false
   when: nas_storage_nfs_client.stat.exists
 
-- name: Garantir que os exports do Immich existem no NAS
+- name: Garantir que os exports dos apps existem no NAS
   vars:
     nas_storage_exported: "{{ nas_storage_showmount.stdout_lines | map('split') | map('first') | list }}"
+    nas_storage_wanted: "{{ nas_storage_volumes | map(attribute='export') | map('extract', nas_storage_exports) | list }}"
   ansible.builtin.assert:
     that:
       - nas_storage_showmount.rc == 0
-      - nas_storage_exports.photos in nas_storage_exported
-      - nas_storage_exports.data in nas_storage_exported
+      - nas_storage_wanted | difference(nas_storage_exported) | length == 0
     fail_msg: >-
       Exports NFS ausentes em {{ nas_storage_host }}
       (encontrados: {{ nas_storage_exported | default([]) }};
@@ -50,56 +50,52 @@
     # Na primeira montagem NFS do host o rpc-statd ainda está subindo e o umount
     # pode falhar uma vez; tenta de novo antes de remover o diretório.
     trap 'umount "${dir}" 2>/dev/null || { sleep 2; umount "${dir}"; }; rmdir "${dir}"' EXIT
-    mount -t nfs -o "{{ (nas_storage_mount_options + [item.mode]) | join(',') }}" \
-      "{{ nas_storage_host }}:{{ item.path }}" "${dir}"
+    mount -t nfs -o "{{ (nas_storage_mount_options + [item.read_only | ternary('ro', 'rw')]) | join(',') }}" \
+      "{{ nas_storage_host }}:{{ nas_storage_exports[item.export] }}" "${dir}"
     ls "${dir}" >/dev/null
-    {% if item.write and not ansible_check_mode %}
+    {% if item.write_test and not ansible_check_mode %}
     probe="${dir}/.k3s-write-test-$$"
     touch "${probe}" && rm "${probe}"
     {% endif %}
   args:
     executable: /bin/bash
-  loop:
-    - { name: photos, path: "{{ nas_storage_exports.photos }}", mode: ro, write: false }
-    - { name: data, path: "{{ nas_storage_exports.data }}", mode: rw, write: true }
+  loop: "{{ nas_storage_volumes }}"
   loop_control:
-    label: "{{ item.name }}: {{ item.path }}"
+    label: "{{ item.name }}: {{ nas_storage_exports[item.export] }}"
   changed_when: false
   check_mode: false
   when: nas_storage_nfs_client.stat.exists
 
-- name: PVs do Immich
+- name: PVs dos apps
   when: not ansible_check_mode or k3s_installed_version | default('') | length > 0
   environment:
     K8S_AUTH_KUBECONFIG: "{{ nas_storage_kubeconfig }}"
   block:
-    - name: Criar PVs NFS pré-vinculados às PVCs do Immich
+    - name: Criar PVs NFS pré-vinculados às PVCs dos apps
       kubernetes.core.k8s:
         state: present
         definition:
           apiVersion: v1
           kind: PersistentVolume
           metadata:
-            name: "immich-{{ item.name }}"
+            name: "{{ item.name }}"
             labels:
-              app.kubernetes.io/part-of: immich
+              app.kubernetes.io/part-of: "{{ item.namespace }}"
           spec:
             capacity:
-              storage: "{{ nas_storage_capacity[item.name] | default('100Gi') }}"
+              storage: "{{ item.capacity }}"
             accessModes: ["{{ item.access_mode }}"]
             persistentVolumeReclaimPolicy: Retain
             storageClassName: ""
             mountOptions: "{{ nas_storage_mount_options }}"
             nfs:
               server: "{{ nas_storage_host }}"
-              path: "{{ item.path }}"
+              path: "{{ nas_storage_exports[item.export] }}"
               readOnly: "{{ item.read_only }}"
-            # Só a PVC do Immich pode usar este PV.
+            # Só a PVC de mesmo nome, no namespace do app, pode usar este PV.
             claimRef:
-              namespace: "{{ nas_storage_namespace }}"
-              name: "immich-{{ item.name }}"
-      loop:
-        - { name: photos, path: "{{ nas_storage_exports.photos }}", access_mode: ReadOnlyMany, read_only: true }
-        - { name: data, path: "{{ nas_storage_exports.data }}", access_mode: ReadWriteOnce, read_only: false }
+              namespace: "{{ item.namespace }}"
+              name: "{{ item.name }}"
+      loop: "{{ nas_storage_volumes }}"
       loop_control:
-        label: "immich-{{ item.name }}"
+        label: "{{ item.name }}"

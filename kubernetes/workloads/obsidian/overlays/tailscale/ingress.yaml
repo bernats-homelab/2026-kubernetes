@@ -1,0 +1,16 @@
+# https://borbsidian.<sua-tailnet>, com TLS automático do Tailscale (o Selkies exige
+# contexto seguro para WebCodecs; o backend fala HTTP na 3000).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: obsidian
+spec:
+  ingressClassName: tailscale
+  defaultBackend:
+    service:
+      name: obsidian
+      port:
+        name: http
+  tls:
+    - hosts:
+        - borbsidian

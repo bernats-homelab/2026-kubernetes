@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: obsidian
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # Ingress "borbsidian" e basic auth (KSOPS) só com Tailscale; o CI usa base.
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      path: kubernetes/workloads/obsidian/{{ ternary "overlays/tailscale" "base" .Values.tailscaleOperator.enabled }}
+    # PVC do vault na mesma Application do Deployment que a monta: em local-path (CI)
+    # ela só vincula quando o pod existe. overlays/nas usa o PV NFS criado pelo Ansible.
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      path: kubernetes/workloads/obsidian/storage/{{ ternary "overlays/nas" "base" .Values.nasStorage.enabled }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: obsidian
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

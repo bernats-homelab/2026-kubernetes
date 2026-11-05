@@ -1,0 +1,22 @@
+# Vincula a PVC do vault ao PV NFS criado pelo Ansible (role nas_storage), que
+# guarda hostname e path do NAS fora do repo. PVC é imutável: troque de base para
+# nas antes do primeiro sync.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: obsidian
+resources:
+  - ../../base
+patches:
+  - target:
+      kind: PersistentVolumeClaim
+      name: obsidian-vault
+    patch: |
+      - op: replace
+        path: /spec/storageClassName
+        value: ""
+      - op: add
+        path: /spec/volumeName
+        value: obsidian-vault
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 10Gi

@@ -1,10 +1,30 @@
 nas_storage_kubeconfig: /etc/rancher/k3s/k3s.yaml
-nas_storage_namespace: immich
 # Mesmas opções usadas no teste de montagem e nos PVs. NFSv3 porque o OMV exporta
 # /export como raiz NFSv4 (fsid=0): em v4 o path seria relativo e não bateria com o
 # que o showmount lista. Em v3 o path do showmount é exatamente o que o PV monta.
 nas_storage_mount_options: [hard, nfsvers=3]
-# Informativo para o Kubernetes (NFS não impõe cota).
-nas_storage_capacity:
-  photos: 1Ti
-  data: 200Gi
+# Um PV por volume, pré-vinculado (claimRef) à PVC de mesmo nome no namespace do app.
+# `export` é a chave em nas_storage_exports (inventário); `capacity` é informativa
+# (NFS não impõe cota). `write_test` grava e apaga um arquivo na montagem de teste.
+nas_storage_volumes:
+  - name: immich-photos
+    export: photos
+    namespace: immich
+    access_mode: ReadOnlyMany
+    read_only: true
+    write_test: false
+    capacity: 1Ti
+  - name: immich-data
+    export: data
+    namespace: immich
+    access_mode: ReadWriteOnce
+    read_only: false
+    write_test: true
+    capacity: 200Gi
+  - name: obsidian-vault
+    export: obsidian
+    namespace: obsidian
+    access_mode: ReadWriteOnce
+    read_only: false
+    write_test: true
+    capacity: 10Gi

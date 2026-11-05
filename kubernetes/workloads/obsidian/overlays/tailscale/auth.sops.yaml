@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: obsidian-auth
+type: Opaque
+stringData:
+    CUSTOM_USER: ENC[AES256_GCM,data:bXCWnjpvvw0=,iv:/DDWEDmWMIPHvaz0qbrKQeszb/uOI46IWm7hlWH0wR0=,tag:xeb3Ru5hEh3dg+auYs8A9A==,type:str]
+    PASSWORD: ENC[AES256_GCM,data:0BXjVEplE9wOx5a8yro0fO1ubZoJtFyc2zAShw==,iv:iNi2P3ZxPA7TZakC++ak18KSMzPDQ12UH/BCsihpgBA=,tag:leu8gz1pJ6d5Q21gKvFPRA==,type:str]
+sops:
+    age:
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBTZjJtQWY5MURTZHZMRjVS
+            R3I3OVEyNGRWM3R2Y25xTkl6WW9WeTdzblJvCndMWGJmUVZoNGQxV3NrSnY1Qi9X
+            YlgrMVZVQTJVNnB1UlpuaWFVeVA2akEKLS0tIHdSSWlCNGRVWVU2NmNJdTdHQ1ht
+            MXFpaGptb0FkQ0JJR2x4VzVjcmIwQ3cKgNMTKSH6uoDBZRwxShiPfvTaAnMaqONu
+            1G1reB/aslK5rNBQ8j11riPWx0FP6XkiJ30BQ+IN0hKn6i3ATRowwQ==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1fskvnv59jkjddglqvsllm3d54qtd6xl0u00utexhd0t0vddlfp8qe2plxs
+        - enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBiMTVNZ1NBZUtUbjB0K0Vm
+            K0kwTTZjclUvZkIwQWFEZDh6ZTJrUUE1UGtvCndRUHhVa05zaXFWbUhaQ2JVLzgw
+            a1pKYmQzZm02azd0SzBGMUxMbG1vOHcKLS0tIENvTmVEeDVRWURYUksveWY3KzQr
+            UEtjRGhpYzRZVHlHSE9Ccmpab05kZFUKUEx1mRo9vCWFdATkmGBltKOQbVFe7J7k
+            zXeJkoWcXvaF271DUHIWw9UinL0pcXK7PJRJ4p7R1YJz2Nhd/hiL3A==
+            -----END AGE ENCRYPTED FILE-----
+          recipient: age1kn09fr57m2vz4jhpw6e8k9qswm0sl702h6kecry5rn0kpjyyuf4sf33yde
+    lastmodified: "2026-11-05T21:35:43Z"
+    mac: ENC[AES256_GCM,data:ZNpyWLjh2KOP3tgPiTzjyNTGaP+FU6bLJLwCY6P+b9Ab/HQ2KWUQNmRrvkcibkU7GA6xIoOsSyd5rhRh543GkBH9yDXgNumF9GCKKZtxgoxwdDZXkaZD1NrGu586me/xd3WZvVK5KvbnSAYtWOcdvWnaFWG2fwnfY8s2dgkdjNg=,iv:g7+fjvcI8t/2Kqz3PIPwYj/czhL2RdwEHni4j4HU6eU=,tag:/HrANgPv3Ny0VOmFb5NV6g==,type:str]
+    unencrypted_regex: ^(apiVersion|metadata|kind|type)$
+    version: 3.13.3

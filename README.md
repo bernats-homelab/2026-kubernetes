@@ -95,7 +95,7 @@ O playbook **nunca** altera o NAS; ele só confere o que você configurou aqui.
 
 ### 2. Inventário (`ansible/inventory/local.yaml`)
 
-Preencha as variáveis de `inventory.example.yaml`: `nas_storage_enabled: true`, `nas_storage_host` e `nas_storage_exports.{photos,data}`, que são os paths `/export/...`. Faça isso **antes** do primeiro `make apply` com o Immich. As PVCs são imutáveis, e com `nas_storage_enabled: false` elas seriam criadas em `local-path`.
+Preencha as variáveis de `inventory.example.yaml`: `nas_storage_enabled: true`, `nas_storage_host` e `nas_storage_exports.{photos,data,obsidian}`, que são os paths `/export/...` (o `obsidian` é o export do vault, veja a seção do Obsidian). Faça isso **antes** do primeiro `make apply` com o Immich. As PVCs são imutáveis, e com `nas_storage_enabled: false` elas seriam criadas em `local-path`.
 
 Depois rode `make plan` e `make apply`. O role `nas_storage` confere os exports com `showmount` e faz uma montagem de teste de cada um, incluindo uma escrita em `immich-data`. Se algo estiver errado no OMV, ele falha antes de criar os PVs.
 
@@ -116,6 +116,20 @@ O Immich faz um `pg_dump` diário em `immich-data/backups` no NAS e mantém 14 c
 gunzip -c <dump>.sql.gz | kubectl -n immich exec -i immich-database-1 -- psql -U postgres -d postgres
 ```
 O dump é um `pg_dumpall` e já recria o banco `app`. Rode isso com o `immich-server` parado (`kubectl -n immich scale deploy/immich-server --replicas=0`). Depois volte o `replicas` para 1. O procedimento completo está na documentação do Immich, em *Backup and Restore*.
+
+## Obsidian no navegador (vault do NAS)
+
+O Obsidian desktop roda no cluster ([linuxserver/obsidian](https://docs.linuxserver.io/images/docker-obsidian/)) e abre pelo navegador em `https://borbsidian.<sua-tailnet>`, com usuário e senha. O vault fica no NAS, montado por NFS, e o estado do app (`/config`) fica no disco do notebook. Veja o [ADR 006](docs/adr/006-obsidian-nas-nfs.md).
+
+1. **NAS (UI do OMV):** crie a shared folder do vault (pode apontar para a pasta que já existe) e um share NFS **Read/Write** para `<IP Tailscale do notebook>/32` com `subtree_check,all_squash,anonuid=<uid>,anongid=<gid>`, como o `immich-data`. Coloque o path em `nas_storage_exports.obsidian` e rode `make apply`.
+2. **Senha:** o usuário e a senha estão em `kubernetes/workloads/obsidian/overlays/tailscale/auth.sops.yaml`:
+   ```bash
+   sops -d kubernetes/workloads/obsidian/overlays/tailscale/auth.sops.yaml
+   ```
+   Para trocar a senha, use `sops edit` no mesmo arquivo e faça push.
+3. **Primeiro acesso:** no Obsidian, use *Open folder as vault* em `/vaults/borbsidian`. A escolha fica salva em `/config`.
+
+**Edição em vários lugares.** Por NFS, o Obsidian do cluster não é avisado de mudanças feitas por outros dispositivos (Syncthing, SMB), porque o inotify não atravessa NFS. Edite num lugar por vez. Ao voltar para o Obsidian do navegador, use *Reload app without saving* (paleta de comandos) antes de editar, para não sobrescrever a versão mais nova.
 
 ## Segredos de apps (KSOPS)
 

@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world cloudnative-pg immich-database immich; do
+for app in root argocd hello-world cloudnative-pg immich-database immich obsidian; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -43,6 +43,15 @@ kubectl -n immich rollout status deployment/immich-server --timeout=600s
 ping="$(kubectl get --raw /api/v1/namespaces/immich/services/immich-server:http/proxy/api/server/ping)"
 grep -q '"res":"pong"' <<<"${ping}" || {
   echo "ERRO: resposta inesperada do Immich: ${ping}" >&2
+  exit 1
+}
+
+echo "==> Obsidian (Selkies) serve a página web"
+kubectl -n obsidian rollout status deployment/obsidian --timeout=600s
+page="$(kubectl get --raw /api/v1/namespaces/obsidian/services/obsidian:http/proxy/)"
+grep -qi '<html' <<<"${page}" || {
+  echo "ERRO: resposta inesperada do Obsidian:" >&2
+  head -c 500 <<<"${page}" >&2
   exit 1
 }
 echo "OK: e2e passou."
