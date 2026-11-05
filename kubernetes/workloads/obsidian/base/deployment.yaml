@@ -37,13 +37,20 @@ spec:
             - name: http
               containerPort: 3000
           # TCP e não HTTP: com basic auth (overlay tailscale) o / responde 401.
+          # A subida faz chown -R de /opt/obsidian (PUID != 911 da imagem), que no
+          # overlayfs copia a app inteira para a camada do container: no disco do
+          # notebook passa de 1 min. A startupProbe segura a liveness até 10 min.
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
           readinessProbe:
             tcpSocket:
               port: http
           livenessProbe:
             tcpSocket:
               port: http
-            initialDelaySeconds: 30
           resources:
             requests:
               cpu: 100m
