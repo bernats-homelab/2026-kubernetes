@@ -17,6 +17,24 @@
       fs.inotify.max_user_watches = 524288
   notify: Recarregar sysctl
 
+- name: Verificar se o AppArmor está ativo no kernel
+  ansible.builtin.stat:
+    path: /sys/kernel/security/apparmor/profiles
+  register: base_apparmor
+
+# Antes do k3s: o containerd usa este perfil em vez de gerar o dele (veja o
+# comentário no arquivo; workaround de containerd#14485).
+- name: Instalar perfil AppArmor padrão dos containers
+  ansible.builtin.copy:
+    src: cri-containerd.apparmor.d
+    dest: /etc/apparmor.d/cri-containerd.apparmor.d
+    owner: root
+    group: root
+    mode: "0644"
+    validate: apparmor_parser --skip-kernel-load --quiet %s
+  when: base_apparmor.stat.exists
+  notify: Recarregar perfil AppArmor dos containers
+
 - name: Baixar helm
   ansible.builtin.get_url:
     url: "https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz"

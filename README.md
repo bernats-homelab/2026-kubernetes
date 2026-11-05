@@ -194,6 +194,7 @@ Recomendado: proteção de branch na `main` exigindo os jobs `lint`, `render` e 
 
 - **Firewall ativo no notebook.** O preflight avisa, mas não altera nada. Se pods não alcançarem a API, libere manualmente os ranges do k3s (`10.42.0.0/16` pods, `10.43.0.0/16` services).
 - **O ArgoCD não abre em `https://argocd.<tailnet>`.** Confira a policy e as tags do Tailscale e rode `kubectl -n tailscale logs deploy/operator`.
+- **Postgres trava na subida, "too many clients" ou pod preso em `Terminating`** (Ubuntu 26.04, kernel 7.0.0-42+). O `dmesg` mostra `apparmor="DENIED" operation="signal" ... peer="cri-containerd.apparmor.d//&unconfined"`. O role `base` instala um perfil AppArmor corrigido para os containers (workaround de [containerd#14485](https://github.com/containerd/containerd/issues/14485)). Rode `make apply`; o perfil é substituído no kernel e vale também para os containers em execução.
 - **Ansible ignora `ansible.cfg`.** Use os targets do `make`, ou exporte `ANSIBLE_CONFIG=$PWD/ansible/ansible.cfg`.
 
 ## Estrutura
