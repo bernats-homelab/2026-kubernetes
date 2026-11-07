@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world cloudnative-pg immich-database immich obsidian k8s-app-smoke; do
+for app in root argocd hello-world cloudnative-pg immich-database immich obsidian k8s-app-smoke grocery-ops; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -65,6 +65,14 @@ kubectl -n k8s-app-smoke rollout status deployment/app-template --timeout=300s
 health="$(kubectl get --raw /api/v1/namespaces/k8s-app-smoke/services/app-template:http/proxy/healthz)"
 if [[ "${health}" != "ok" ]]; then
   echo "ERRO: resposta inesperada da app externa: '${health}'" >&2
+  exit 1
+fi
+
+echo "==> grocery-ops (Bemesko/grocery-ops, Nuxt) responde /healthz"
+kubectl -n grocery-ops rollout status deployment/grocery-ops --timeout=300s
+health="$(kubectl get --raw /api/v1/namespaces/grocery-ops/services/grocery-ops:http/proxy/healthz)"
+if [[ "${health}" != "ok" ]]; then
+  echo "ERRO: resposta inesperada do grocery-ops: '${health}'" >&2
   exit 1
 fi
 echo "OK: e2e passou."

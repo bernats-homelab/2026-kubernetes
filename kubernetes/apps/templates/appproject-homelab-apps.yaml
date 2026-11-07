@@ -7,9 +7,11 @@ metadata:
     # Antes das Applications que o usam (templates/external-apps.yaml).
     argocd.argoproj.io/sync-wave: "-1"
 spec:
-  description: Apps de outros repos da org (repotpl-k8s-app); só recursos namespaced
+  description: Apps de outros repos (repotpl-k8s-app); só recursos namespaced
   sourceRepos:
     - https://github.com/bernats-homelab/*
+    # Conta pessoal: só repos públicos (a credencial GitHub App cobre só a org).
+    - https://github.com/Bemesko/*
   destinations:
     # Qualquer namespace, exceto os do sistema e da plataforma (negação do ArgoCD).
     - server: https://kubernetes.default.svc
