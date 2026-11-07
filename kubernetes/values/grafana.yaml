@@ -18,9 +18,10 @@ initChownData:
 resources:
   requests:
     cpu: 50m
-    memory: 128Mi
+    memory: 192Mi
+  # 256Mi dava OOMKilled já na subida (migrações do banco do Grafana 13).
   limits:
-    memory: 256Mi
+    memory: 512Mi
 
 grafana.ini:
   analytics:
