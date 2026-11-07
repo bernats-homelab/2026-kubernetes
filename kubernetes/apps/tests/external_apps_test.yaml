@@ -3,16 +3,41 @@ templates:
   - templates/external-apps.yaml
   - templates/appproject-homelab-apps.yaml
 tests:
+  # `set` mescla com o values.yaml: `grocery-ops: null` remove a app real nos testes isolados.
   - it: sem apps e sem smoke não gera Application
     template: templates/external-apps.yaml
+    set:
+      apps.grocery-ops: null
     asserts:
       - hasDocuments:
           count: 0
+
+  - it: grocery-ops (conta pessoal Bemesko, pública) sai do values.yaml fixado numa tag
+    template: templates/external-apps.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: grocery-ops
+      - equal:
+          path: spec.source.repoURL
+          value: https://github.com/Bemesko/grocery-ops
+      - matchRegex:
+          path: spec.source.targetRevision
+          pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$
+      - equal:
+          path: spec.destination.namespace
+          value: grocery-ops
+      - equal:
+          path: spec.project
+          value: homelab-apps
 
   - it: cada entrada de apps vira uma Application no AppProject homelab-apps, fixada na tag
     template: templates/external-apps.yaml
     set:
       apps:
+        grocery-ops: null
         alpha:
           repoURL: https://github.com/bernats-homelab/alpha
           targetRevision: v1.2.3
@@ -92,6 +117,7 @@ tests:
     set:
       smokeApp.enabled: true
       tailscaleOperator.enabled: false
+      apps.grocery-ops: null
     asserts:
       - hasDocuments:
           count: 1
@@ -108,7 +134,7 @@ tests:
           path: spec.project
           value: homelab-apps
 
-  - it: AppProject só aceita repos da org, nada cluster-scoped além de Namespace
+  - it: AppProject só aceita repos da org e da conta Bemesko, nada cluster-scoped além de Namespace
     template: templates/appproject-homelab-apps.yaml
     asserts:
       - isKind:
@@ -118,7 +144,7 @@ tests:
           value: "-1"
       - equal:
           path: spec.sourceRepos
-          value: [https://github.com/bernats-homelab/*]
+          value: [https://github.com/bernats-homelab/*, https://github.com/Bemesko/*]
       - equal:
           path: spec.clusterResourceWhitelist
           value:

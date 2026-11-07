@@ -13,7 +13,7 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
                                                ├─ cloudnative-pg        → Postgres do Immich
                                                ├─ immich                → https://fotos.<sua-tailnet>
                                                │    └─ NFS (tailnet) ──▶ NAS openmediavault (fotos ro, immich-data rw)
-                                               └─ apps: (outros repos da org, AppProject homelab-apps)
+                                               └─ apps: (outros repos da org/Bemesko, AppProject homelab-apps)
                                                     └─ bernats-homelab/<app> @ vX.Y.Z → deploy/ → https://<app>.<sua-tailnet>
 ```
 
@@ -167,7 +167,9 @@ Apps próprias ficam em repos separados da org, gerados a partir do template [be
    ```
 3. Depois do merge, o ArgoCD cria o namespace `<nome>` e sincroniza `deploy/overlays/tailscale`, que fica em `https://<nome>.<sua-tailnet>`.
 
-Para uma versão nova, rode o release no repo da app e abra o PR trocando o `targetRevision`. O `values.schema.json` só aceita repos `bernats-homelab/*` e tags `vX.Y.Z`.
+Para uma versão nova, rode o release no repo da app e abra o PR trocando o `targetRevision`. O `values.schema.json` só aceita repos `bernats-homelab/*` ou `Bemesko/*` e tags `vX.Y.Z`.
+
+Repos da conta pessoal `Bemesko` (por exemplo [grocery-ops](https://github.com/Bemesko/grocery-ops)) também são aceitos, mas precisam ser **públicos**, assim como o pacote GHCR deles: a credencial da GitHub App só cobre a org.
 
 As Applications rodam no AppProject `homelab-apps`. Ele não permite recursos cluster-scoped (fora `Namespace`) nem os namespaces do sistema e da plataforma. O e2e sincroniza o próprio template (`smokeApp`, Ansible `external_apps_smoke_enabled=true`) para cobrir esse caminho.
 

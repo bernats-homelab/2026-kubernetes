@@ -15,8 +15,9 @@ Até aqui todo workload morava neste repo (`kubernetes/workloads/`). Para apps p
   - workflow de release (imagem no GHCR → digest gravado em `deploy/base` → tag `vX.Y.Z`);
   - CI com as mesmas validações daqui (kubeconform, kube-linter, sops, gitleaks) e um e2e em k3s.
 - **Aqui fica só a Application.** Cada entrada de `apps:` em `kubernetes/apps/values.yaml` vira uma Application (`templates/external-apps.yaml`) que sincroniza `deploy/` do repo da app.
-  - O `values.schema.json` exige repo `bernats-homelab/*` e tag semver: promover uma versão é um PR aqui, revisável como a troca de versão de um chart.
-- **AppProject `homelab-apps`.** Só aceita repos da org, nenhum recurso cluster-scoped além de `Namespace`, e nega os namespaces do sistema e da plataforma.
+  - O `values.schema.json` exige repo `bernats-homelab/*` ou `Bemesko/*` e tag semver: promover uma versão é um PR aqui, revisável como a troca de versão de um chart.
+- **AppProject `homelab-apps`.** Só aceita repos da org e da conta pessoal `Bemesko`, nenhum recurso cluster-scoped além de `Namespace`, e nega os namespaces do sistema e da plataforma.
+  - *Adendo (2026-11-07):* a conta pessoal entrou para o `grocery-ops`. Repos dela precisam ser públicos, porque a credencial (GitHub App) só cobre a org.
   - Um repo de app com problema não consegue mexer no ArgoCD, no Tailscale, no CNPG ou nos dados do Immich.
 - **Credenciais (opcionais), criadas pelo Ansible a partir de `ansible/secrets/` (rota do ADR 002):**
 
