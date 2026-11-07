@@ -1,0 +1,65 @@
+# Métricas do host (via /hostfs) e syslog do OMV -> gateway OTLP do cluster.
+# service.name=nas-host: vira job (Prometheus) e service_name (Loki); o alerta
+# "NAS sem métricas" no Grafana depende dele.
+receivers:
+  hostmetrics:
+    root_path: /hostfs
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      paging: {}
+      disk: {}
+      network: {}
+      filesystem:
+        exclude_fs_types:
+          fs_types: [autofs, cgroup2, devtmpfs, nsfs, overlay, proc, squashfs, sysfs, tmpfs, tracefs]
+          match_type: strict
+  # O OMV encaminha o syslog para cá: System -> Notifications/Diagnostics ->
+  # System Logs -> Remote (host 127.0.0.1, porta 5140, TCP).
+  syslog:
+    tcp:
+      listen_address: 127.0.0.1:5140
+    protocol: rfc3164
+    location: America/Sao_Paulo
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 200
+  resourcedetection:
+    detectors: [system]
+    system:
+      hostname_sources: [os]
+  resource:
+    attributes:
+      - key: service.name
+        value: nas-host
+        action: upsert
+  batch: {}
+
+exporters:
+  otlp:
+    endpoint: ${env:OTEL_GATEWAY}
+    # Tráfego já cifrado pelo WireGuard da tailnet.
+    tls:
+      insecure: true
+    # Em memória: o NAS não aguenta escrita contínua no pendrive.
+    sending_queue:
+      enabled: true
+      queue_size: 500
+
+service:
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp]
+    logs:
+      receivers: [syslog]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp]

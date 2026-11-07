@@ -7,7 +7,7 @@
 
 # Estrutura do Repositório
 
-- `ansible/`: `site.yaml` (preflight → base → power → tailscale_check → k3s → cluster_bootstrap → nas_storage → kubeconfig) e `reset.yaml`
+- `ansible/`: `site.yaml` (preflight → base → power → tailscale_check → k3s → cluster_bootstrap → otel_host_agent → nas_storage → kubeconfig) e `reset.yaml`
 - `kubernetes/apps/`: chart app-of-apps; `values.yaml` é a FONTE ÚNICA das versões de charts (o Ansible também lê)
 - `kubernetes/workloads/<app>/{base,overlays/tailscale}`: `base` é usado no CI (sem Tailscale)
 - Apps de outros repos da org ou da conta pessoal `Bemesko`, só públicos (template `bernats-homelab/repotpl-k8s-app`): só a entrada em `apps:` de `kubernetes/apps/values.yaml`; os kustomize ficam no `deploy/` do repo da app

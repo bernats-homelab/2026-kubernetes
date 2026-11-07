@@ -52,7 +52,7 @@
           { "$ref": "#/definitions/dnsLabel" },
           {
             "not": {
-              "enum": ["root", "argocd", "tailscale-operator", "hello-world", "cloudnative-pg", "immich-database", "immich", "obsidian", "k8s-app-smoke"]
+              "enum": ["root", "argocd", "tailscale-operator", "hello-world", "cloudnative-pg", "immich-database", "immich", "obsidian", "k8s-app-smoke", "prometheus", "loki", "tempo", "grafana", "otel-agent", "otel-gateway", "observability"]
             }
           }
         ]
@@ -72,12 +72,17 @@
     "charts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["argocd", "tailscaleOperator", "cloudnativePg", "immich"],
+      "required": ["argocd", "tailscaleOperator", "cloudnativePg", "immich", "prometheus", "loki", "tempo", "grafana", "opentelemetryCollector"],
       "properties": {
         "argocd": { "$ref": "#/definitions/chart" },
         "tailscaleOperator": { "$ref": "#/definitions/chart" },
         "cloudnativePg": { "$ref": "#/definitions/chart" },
-        "immich": { "$ref": "#/definitions/chart" }
+        "immich": { "$ref": "#/definitions/chart" },
+        "prometheus": { "$ref": "#/definitions/chart" },
+        "loki": { "$ref": "#/definitions/chart" },
+        "tempo": { "$ref": "#/definitions/chart" },
+        "grafana": { "$ref": "#/definitions/chart" },
+        "opentelemetryCollector": { "$ref": "#/definitions/chart" }
       }
     }
   }

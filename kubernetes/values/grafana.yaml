@@ -1,0 +1,94 @@
+# Values do chart grafana (grafana-community), versão em kubernetes/apps/values.yaml.
+# Datasources correlacionadas (métricas <-> logs <-> traces), regras de alerta e
+# dashboards vindos de ConfigMaps (kubernetes/workloads/observability) pelo sidecar.
+# No notebook o template da Application acrescenta Ingress, admin e SMTP (SOPS).
+image:
+  tag: 13.3.0-distroless
+  sha: 540b8afb775bf34aefce417e4329039daa5d44b6f2fbda6881397b1b247ca7df
+
+persistence:
+  enabled: true
+  type: pvc
+  storageClassName: local-path
+  size: 1Gi
+# fsGroup do securityContext padrão (472) já ajusta o dono do volume.
+initChownData:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+
+grafana.ini:
+  analytics:
+    check_for_updates: false
+    reporting_enabled: false
+  auth.anonymous:
+    enabled: false
+  users:
+    allow_sign_up: false
+
+sidecar:
+  image:
+    sha: 52d311dcedd587421a236c4d6c621f05614c40a51386e955e0699dca97ec0880
+  alerts:
+    enabled: true
+    label: grafana_alert
+    searchNamespace: observability
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    searchNamespace: observability
+    folderAnnotation: grafana_folder
+    provider:
+      foldersFromFilesStructure: true
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        url: http://prometheus-server.observability.svc
+        isDefault: true
+        jsonData:
+          httpMethod: POST
+          exemplarTraceIdDestinations:
+            - name: trace_id
+              datasourceUid: tempo
+      - name: Loki
+        uid: loki
+        type: loki
+        url: http://loki.observability.svc:3100
+        jsonData:
+          # trace_id vem como structured metadata nos logs OTLP.
+          derivedFields:
+            - name: trace_id
+              matcherType: label
+              matcherRegex: trace_id
+              datasourceUid: tempo
+              url: "$${__value.raw}"
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        url: http://tempo.observability.svc:3200
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: -5m
+            spanEndTimeShift: 5m
+            filterByTraceID: true
+            customQuery: false
+            tags:
+              - key: service.name
+                value: service_name
+          tracesToMetrics:
+            datasourceUid: prometheus
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true

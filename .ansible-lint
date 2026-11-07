@@ -4,6 +4,7 @@ exclude_paths:
   - .github/
   - kubernetes/
   - .cache/
+  - .claude/ # worktrees locais de sessões do Claude Code (fora do git)
   - ansible/secrets/*.sops.yaml # gerado pelo sops; validado pelo hook sops-encrypted
 kinds:
   - playbook: "ansible/*.yaml"

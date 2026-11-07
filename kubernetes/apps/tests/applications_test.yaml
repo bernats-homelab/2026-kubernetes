@@ -7,6 +7,13 @@ templates:
   - templates/immich-database.yaml
   - templates/immich.yaml
   - templates/obsidian.yaml
+  - templates/prometheus.yaml
+  - templates/loki.yaml
+  - templates/tempo.yaml
+  - templates/observability.yaml
+  - templates/otel-gateway.yaml
+  - templates/otel-agent.yaml
+  - templates/grafana.yaml
 tests:
   - it: toda Application tem sync automático com prune e selfHeal
     asserts:
@@ -52,6 +59,34 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "2"
         template: templates/obsidian.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/prometheus.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/loki.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/tempo.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/observability.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+        template: templates/otel-gateway.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+        template: templates/otel-agent.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+        template: templates/grafana.yaml
 
   - it: Application do ArgoCD não tem finalizer (não se auto-apaga)
     template: templates/argocd.yaml
@@ -211,3 +246,50 @@ tests:
       - equal:
           path: spec.sources[1].path
           value: kubernetes/workloads/obsidian/storage/base
+
+  - it: versões dos charts de observabilidade vêm do values (fonte única; um chart, duas releases do coletor)
+    set:
+      charts.opentelemetryCollector.version: 7.7.7
+      charts.grafana.version: 6.6.6
+    asserts:
+      - equal:
+          path: spec.sources[0].targetRevision
+          value: 7.7.7
+        template: templates/otel-agent.yaml
+      - equal:
+          path: spec.sources[0].targetRevision
+          value: 7.7.7
+        template: templates/otel-gateway.yaml
+      - equal:
+          path: spec.sources[0].helm.releaseName
+          value: otel-gateway
+        template: templates/otel-gateway.yaml
+      - equal:
+          path: spec.sources[0].targetRevision
+          value: 6.6.6
+        template: templates/grafana.yaml
+
+  - it: Grafana com Tailscale tem Ingress e usa os Secrets SOPS de admin e SMTP
+    template: templates/grafana.yaml
+    asserts:
+      - equal:
+          path: spec.sources[0].helm.valuesObject.ingress.hosts[0]
+          value: grafana
+      - equal:
+          path: spec.sources[0].helm.valuesObject.admin.existingSecret
+          value: grafana-admin
+      - equal:
+          path: spec.sources[0].helm.valuesObject.envFromSecret
+          value: grafana-smtp
+
+  - it: sem Tailscale (CI) o Grafana não tem Ingress nem Secrets e o provisionamento usa base
+    set:
+      tailscaleOperator.enabled: false
+    asserts:
+      - notExists:
+          path: spec.sources[0].helm.valuesObject
+        template: templates/grafana.yaml
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/observability/base
+        template: templates/observability.yaml

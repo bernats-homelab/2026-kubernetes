@@ -1,0 +1,27 @@
+# Provisionamento do Grafana (regras de alerta) e, no notebook, os Secrets do
+# Grafana, o contact point de e-mail e o otel-gateway na tailnet ("otel").
+# Wave 2: os Secrets existem antes do Grafana (wave 3). Veja docs/adr/008.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: kubernetes/workloads/observability/{{ ternary "overlays/tailscale" "base" .Values.tailscaleOperator.enabled }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

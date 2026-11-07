@@ -1,0 +1,43 @@
+# OpenTelemetry Collector (contrib) direto no host: o journald (k3s, kernel,
+# AppArmor) e as métricas do host não são visíveis de dentro do cluster.
+- name: Baixar otelcol-contrib
+  vars:
+    otel_host_agent_release: https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download
+  ansible.builtin.get_url:
+    url: "{{ otel_host_agent_release }}/v{{ otel_host_agent_version }}/otelcol-contrib_{{ otel_host_agent_version }}_linux_amd64.deb"
+    dest: "/var/cache/otelcol-contrib_{{ otel_host_agent_version }}_linux_amd64.deb"
+    checksum: "sha256:{{ otel_host_agent_deb_sha256 }}"
+    mode: "0644"
+  register: otel_host_agent_deb
+
+- name: Instalar otelcol-contrib
+  ansible.builtin.apt:
+    deb: "/var/cache/otelcol-contrib_{{ otel_host_agent_version }}_linux_amd64.deb"
+  # Em check mode o get_url não baixa o arquivo, então não há o que instalar.
+  when: not (ansible_check_mode and otel_host_agent_deb is changed)
+  notify: Reiniciar otelcol-contrib
+
+- name: Permitir que o coletor leia o journald
+  ansible.builtin.user:
+    name: otelcol-contrib
+    groups: [systemd-journal]
+    append: true
+  when: not (ansible_check_mode and otel_host_agent_deb is changed)
+  notify: Reiniciar otelcol-contrib
+
+- name: Configurar otelcol-contrib
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/otelcol-contrib/config.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: not (ansible_check_mode and otel_host_agent_deb is changed)
+  notify: Reiniciar otelcol-contrib
+
+- name: Habilitar e iniciar otelcol-contrib
+  ansible.builtin.systemd_service:
+    name: otelcol-contrib
+    enabled: true
+    state: started
+  when: not (ansible_check_mode and otel_host_agent_deb is changed)

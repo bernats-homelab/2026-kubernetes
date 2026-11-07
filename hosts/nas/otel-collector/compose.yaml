@@ -1,0 +1,20 @@
+# OpenTelemetry Collector do NAS (openmediavault). NÃO é aplicado pelo Ansible:
+# cole no plugin compose do OMV (Services -> Compose -> Files), como no README.
+# OTEL_GATEWAY: nome MagicDNS do gateway do cluster na tailnet + porta, ex.: otel:4317.
+services:
+  otel-collector:
+    # yamllint disable-line rule:line-length
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
+    container_name: otel-collector
+    restart: unless-stopped
+    # Host: lê as interfaces e o syslog do próprio NAS em 127.0.0.1.
+    network_mode: host
+    # Nada gravado em disco (o sistema roda num pendrive): fila só em memória.
+    read_only: true
+    mem_limit: 256m
+    environment:
+      OTEL_GATEWAY: ${OTEL_GATEWAY:-otel:4317}
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./config.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - /:/hostfs:ro

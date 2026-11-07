@@ -16,3 +16,6 @@ all:
             photos: </export/fotos>
             data: </export/immich-data>
             obsidian: </export/borbsidian>
+          # OpenTelemetry Collector no host (journald + métricas) -> gateway do cluster.
+          otel_host_agent_enabled: true
+          otel_host_agent_endpoint: <nome-magicdns-do-gateway>:4317

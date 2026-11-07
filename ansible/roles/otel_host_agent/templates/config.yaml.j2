@@ -1,0 +1,62 @@
+# {{ ansible_managed }}
+# Logs do journald e métricas do host -> gateway OTLP do cluster (via tailnet).
+receivers:
+  journald:
+    priority: {{ otel_host_agent_journald_priority }}
+  hostmetrics:
+    collection_interval: {{ otel_host_agent_collection_interval }}
+    scrapers:
+      cpu: {}
+      load: {}
+      memory: {}
+      paging: {}
+      disk: {}
+      network: {}
+      filesystem:
+        exclude_fs_types:
+          fs_types: [autofs, cgroup2, devtmpfs, nsfs, overlay, proc, squashfs, sysfs, tmpfs, tracefs]
+          match_type: strict
+        exclude_mount_points:
+          # Volumes dos pods e montagens NFS do kubelet já aparecem pelo cluster.
+          mount_points: ["/var/lib/kubelet/*", "/run/k3s/*", "/snap/*"]
+          match_type: regexp
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: {{ otel_host_agent_memory_limit_mib }}
+  resourcedetection:
+    detectors: [system]
+    system:
+      hostname_sources: [os]
+  # Vira job (Prometheus) e service_name (Loki); as regras de alerta filtram por ele.
+  resource:
+    attributes:
+      - key: service.name
+        value: homelab-host
+        action: upsert
+  batch: {}
+
+exporters:
+  otlp:
+    endpoint: {{ otel_host_agent_endpoint }}
+    # Tráfego já cifrado pelo WireGuard da tailnet.
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      queue_size: 1000
+
+service:
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    logs:
+      receivers: [journald]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp]
+    metrics:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renderiza manifests para validação (stdout, multi-documento).
 #   render-manifests.sh local     -> chart app-of-apps (Tailscale/NAS on/off) + kustomize dos workloads (offline, KSOPS via stub)
-#   render-manifests.sh upstream  -> charts upstream (argo-cd, tailscale-operator, cloudnative-pg, immich) com nossos values (precisa de rede)
+#   render-manifests.sh upstream  -> charts upstream (argo-cd, tailscale-operator, cloudnative-pg, immich, prometheus, loki, tempo, grafana, otel-agent/otel-gateway) com nossos values (precisa de rede)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -51,16 +51,23 @@ render_upstream() {
   export HELM_REPOSITORY_CACHE="${helm_home}/cache"
   export HELM_REGISTRY_CONFIG="${helm_home}/registry.json"
 
-  local key
-  for key in argocd tailscaleOperator cloudnativePg immich; do
-    # Mesmos release names/namespaces das Applications em kubernetes/apps/templates
-    local release namespace repo chart
-    case "${key}" in
-      argocd) release=argocd namespace=argocd ;;
-      tailscaleOperator) release=tailscale-operator namespace=tailscale ;;
-      cloudnativePg) release=cloudnative-pg namespace=cnpg-system ;;
-      immich) release=immich namespace=immich ;;
-    esac
+  # chave-do-chart:release:namespace, iguais às Applications em kubernetes/apps/templates.
+  # Um chart pode ter mais de uma release (opentelemetryCollector: agent e gateway).
+  local entry key release namespace repo chart
+  local releases=(
+    argocd:argocd:argocd
+    tailscaleOperator:tailscale-operator:tailscale
+    cloudnativePg:cloudnative-pg:cnpg-system
+    immich:immich:immich
+    prometheus:prometheus:observability
+    loki:loki:observability
+    tempo:tempo:observability
+    grafana:grafana:observability
+    opentelemetryCollector:otel-agent:observability
+    opentelemetryCollector:otel-gateway:observability
+  )
+  for entry in "${releases[@]}"; do
+    IFS=: read -r key release namespace <<<"${entry}"
     repo="$(chart_field "${key}" repoURL)"
     chart="$(chart_field "${key}" chart)"
     # Charts OCI são referenciados direto (oci://registry/path/chart), sem --repo.

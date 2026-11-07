@@ -1,0 +1,26 @@
+argument_specs:
+  main:
+    short_description: OpenTelemetry Collector no host (journald + métricas do host) enviando OTLP ao gateway do cluster
+    options:
+      otel_host_agent_version:
+        description: Versão do otelcol-contrib (definida em group_vars/all)
+        type: str
+        required: true
+      otel_host_agent_deb_sha256:
+        description: sha256 do .deb amd64 publicado no release
+        type: str
+        required: true
+      otel_host_agent_endpoint:
+        description: host:porta OTLP/gRPC do gateway (nome MagicDNS curto)
+        type: str
+        default: otel:4317
+      otel_host_agent_collection_interval:
+        type: str
+        default: 30s
+      otel_host_agent_journald_priority:
+        type: str
+        choices: [emerg, alert, crit, err, warning, notice, info, debug]
+        default: info
+      otel_host_agent_memory_limit_mib:
+        type: int
+        default: 200

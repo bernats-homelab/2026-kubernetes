@@ -1,0 +1,19 @@
+# Contact point de e-mail e política padrão (sidecar, label grafana_alert).
+# O destinatário vem do Secret grafana-smtp (env ALERT_EMAIL_TO): nada de e-mail no repo.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: email
+    receivers:
+      - uid: email-homelab
+        type: email
+        settings:
+          addresses: $ALERT_EMAIL_TO
+          singleEmail: true
+policies:
+  - orgId: 1
+    receiver: email
+    group_by: [grafana_folder, alertname]
+    group_wait: 1m
+    group_interval: 10m
+    repeat_interval: 12h

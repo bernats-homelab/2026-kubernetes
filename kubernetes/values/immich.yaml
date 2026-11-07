@@ -52,6 +52,8 @@ server:
       containers:
         main:
           env:
+            # Métricas Prometheus em :8081 (API) e :8082 (workers), lidas pelo otel-agent.
+            IMMICH_TELEMETRY_INCLUDE: all
             # URI completa gerada pelo CloudNativePG (usuário/senha/host do banco "app").
             DB_URL:
               valueFrom:

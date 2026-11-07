@@ -1,0 +1,32 @@
+# TSDB das métricas (recebe OTLP do otel-gateway). Veja docs/adr/008.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: {{ .Values.charts.prometheus.repoURL }}
+      chart: {{ .Values.charts.prometheus.chart }}
+      targetRevision: {{ .Values.charts.prometheus.version | quote }}
+      helm:
+        releaseName: prometheus
+        valueFiles:
+          - $values/kubernetes/values/prometheus.yaml
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

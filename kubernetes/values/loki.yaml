@@ -1,0 +1,77 @@
+# Values do chart loki (grafana-community), versão em kubernetes/apps/values.yaml.
+# Monolítico, filesystem no disco do notebook, logs entrando por OTLP (/otlp) do
+# otel-gateway. Sem gateway nginx, caches, canary nem testes. Veja docs/adr/008.
+deploymentMode: Monolithic
+
+loki:
+  image:
+    tag: 3.7.9
+    digest: sha256:0db216b630ae1f348a1584c67f3cead8b4c1fc839169a39501db664744158e28
+  # Um tenant só (homelab): sem X-Scope-OrgID.
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2026-11-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    # OTLP nativo: atributos que não viram label ficam como structured metadata.
+    allow_structured_metadata: true
+    volume_enabled: true
+    retention_period: 14d
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+    max_query_lookback: 14d
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+  pattern_ingester:
+    enabled: false
+  ruler:
+    enable_api: false
+  analytics:
+    reporting_enabled: false
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 6Gi
+    storageClass: local-path
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 768Mi
+
+gateway:
+  enabled: false
+resultsCache:
+  enabled: false
+chunksCache:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+sidecar:
+  rules:
+    enabled: false
+
+# Componentes dos outros modos de deploy (o chart só cria os do modo escolhido,
+# mas zerar deixa explícito).
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0

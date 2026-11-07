@@ -1,0 +1,205 @@
+# Regras do Grafana Alerting, carregadas pelo sidecar (label grafana_alert).
+# Métricas chegam por OTLP: nomes seguem a tradução do Prometheus
+# (system.filesystem.usage -> system_filesystem_usage_bytes). Hosts são
+# identificados por service.name: homelab-host (otel_host_agent) e nas-host (NAS),
+# que vira o label job no Prometheus e service_name no Loki.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: homelab
+    folder: Homelab
+    interval: 1m
+    rules:
+      - uid: host-disk-full
+        title: Disco raiz acima de 85%
+        condition: B
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }}: disco / com {{ humanizePercentage $values.A.Value }} em uso"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (host_name) (system_filesystem_usage_bytes{mountpoint="/", state="used"})
+                / sum by (host_name) (system_filesystem_usage_bytes{mountpoint="/"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.85]}
+
+      - uid: host-memory-low
+        title: Memória disponível abaixo de 10%
+        condition: B
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }}: só {{ humanizePercentage $values.A.Value }} de memória disponível"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (host_name) (system_memory_usage_bytes{state=~"free|cached|buffered|slab_reclaimable"})
+                / sum by (host_name) (system_memory_usage_bytes)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [0.10]}
+
+      - uid: pod-restarting
+        title: Container reiniciando
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_pod_name }} ({{ $labels.k8s_container_name }}) reiniciou {{ $values.A.Value }}x em 30 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 1800, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (k8s_namespace_name, k8s_pod_name, k8s_container_name)
+                (delta(k8s_container_restarts[30m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [2]}
+
+      - uid: argocd-app-unhealthy
+        title: Application do ArgoCD fora de Healthy
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "Application {{ $labels.name }} está {{ $labels.health_status }}"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: count by (name, health_status) (argocd_app_info{health_status!="Healthy"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Pegaria o incidente de 05/11: conexões presas lotaram o max_connections.
+      - uid: postgres-connections-high
+        title: Postgres perto do max_connections
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.pod }}: {{ humanizePercentage $values.A.Value }} das conexões em uso"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (pod) (cnpg_backends_total)
+                / max by (pod) (cnpg_pg_settings_setting{name="max_connections"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+
+      - uid: nas-silent
+        title: NAS sem métricas
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: O NAS não envia métricas há 10 minutos (desligado, sem rede ou coletor parado)
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: absent_over_time(system_cpu_load_average_1m{job="nas-host"}[10m])
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Pegaria o incidente de 05/11: kernel negando sinais dentro dos containers.
+      - uid: host-apparmor-denied
+        title: AppArmor negando sinais no host
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $values.A.Value }} negações de sinal do AppArmor nos últimos 10 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: >-
+                sum(count_over_time({service_name="homelab-host"}
+                |= "apparmor=\"DENIED\"" |= "operation=\"signal\"" [10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}

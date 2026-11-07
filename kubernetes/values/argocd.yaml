@@ -4,6 +4,9 @@ configs:
   params:
     # TLS termina no proxy do Tailscale Operator
     server.insecure: true
+    # Traces de sync/render/API por OTLP para o otel-agent (docs/adr/008).
+    otlp.address: otel-agent.observability.svc:4317
+    otlp.insecure: true
   cm:
     # Habilita o generator KSOPS (exec KRM function) nas Applications kustomize.
     kustomize.buildOptions: --enable-alpha-plugins --enable-exec
@@ -66,3 +69,14 @@ repoServer:
     - name: sops-age
       mountPath: /sops-age
       readOnly: true
+  metrics:
+    enabled: true
+
+# Services de métricas lidos pelo otel-agent (receiver prometheus), que os envia por
+# OTLP ao Prometheus. argocd_app_info alimenta o alerta de Application fora de Healthy.
+controller:
+  metrics:
+    enabled: true
+server:
+  metrics:
+    enabled: true

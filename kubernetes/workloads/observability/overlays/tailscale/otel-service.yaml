@@ -1,0 +1,25 @@
+# Porta de entrada OTLP para quem está fora do cluster (otel_host_agent nos hosts,
+# coletor do NAS): o otel-gateway exposto na tailnet como "otel".
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel
+  annotations:
+    tailscale.com/hostname: otel
+    ignore-check.kube-linter.io/dangling-service: "os pods vêm da release otel-gateway (chart), fora deste kustomize"
+spec:
+  type: LoadBalancer
+  loadBalancerClass: tailscale
+  selector:
+    app.kubernetes.io/name: opentelemetry-collector
+    app.kubernetes.io/instance: otel-gateway
+    component: standalone-collector
+  ports:
+    - name: otlp
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP

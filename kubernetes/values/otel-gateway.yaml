@@ -1,0 +1,88 @@
+# Values do chart opentelemetry-collector (release otel-gateway), versão em
+# kubernetes/apps/values.yaml. Ponto único de saída para os backends: recebe OTLP
+# do otel-agent, dos hosts (otel_host_agent) e do NAS (via Service "otel" na
+# tailnet), coleta métricas e eventos do cluster e exporta por OTLP para
+# Prometheus, Loki e Tempo. Trocar de backend = trocar os exporters aqui.
+mode: deployment
+replicaCount: 1
+fullnameOverride: otel-gateway
+
+image:
+  repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
+  tag: 0.163.2
+  digest: sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
+
+presets:
+  clusterMetrics:
+    enabled: true
+  kubernetesEvents:
+    enabled: true
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    prometheus: null
+  processors:
+    resource:
+      attributes:
+        - key: k8s.cluster.name
+          value: homelab
+          action: insert
+  exporters:
+    debug: null
+    otlphttp/prometheus:
+      metrics_endpoint: http://prometheus-server.observability.svc/api/v1/otlp/v1/metrics
+      tls:
+        insecure: true
+    otlphttp/loki:
+      logs_endpoint: http://loki.observability.svc:3100/otlp/v1/logs
+      tls:
+        insecure: true
+    otlp/tempo:
+      endpoint: tempo.observability.svc:4317
+      tls:
+        insecure: true
+  service:
+    telemetry:
+      metrics:
+        level: none
+        readers: null
+    pipelines:
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlphttp/loki]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlphttp/prometheus]
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlp/tempo]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 192Mi
+  limits:
+    memory: 512Mi

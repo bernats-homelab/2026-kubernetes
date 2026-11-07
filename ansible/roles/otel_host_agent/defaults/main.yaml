@@ -1,0 +1,8 @@
+# Gateway OTLP/gRPC do cluster (Service "otel" na tailnet). Fica no inventário
+# privado (ansible/inventory/local.yaml), como var de host.
+otel_host_agent_endpoint: otel:4317
+otel_host_agent_collection_interval: 30s
+# Prioridade mínima lida do journald (0=emerg ... 6=info).
+otel_host_agent_journald_priority: info
+# Teto de memória do processo (memory_limiter) em MiB.
+otel_host_agent_memory_limit_mib: 200

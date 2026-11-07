@@ -1,0 +1,32 @@
+# DaemonSet: logs dos pods, kubelet, OTLP dos apps -> otel-gateway. Veja docs/adr/008.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-agent
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: {{ .Values.charts.opentelemetryCollector.repoURL }}
+      chart: {{ .Values.charts.opentelemetryCollector.chart }}
+      targetRevision: {{ .Values.charts.opentelemetryCollector.version | quote }}
+      helm:
+        releaseName: otel-agent
+        valueFiles:
+          - $values/kubernetes/values/otel-agent.yaml
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

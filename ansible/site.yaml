@@ -22,6 +22,9 @@
       tags: [k3s]
     - role: cluster_bootstrap
       tags: [cluster]
+    - role: otel_host_agent
+      when: otel_host_agent_enabled | bool
+      tags: [otel]
     - role: nas_storage
       when: nas_storage_enabled | bool
       tags: [nas]

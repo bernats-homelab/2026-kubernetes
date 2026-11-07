@@ -1,0 +1,16 @@
+# Provisionamento do Grafana (regras de alerta) lido pelo sidecar do chart.
+# base = CI; overlays/tailscale = notebook (segredos, e-mail e Service "otel" na tailnet).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: observability
+configMapGenerator:
+  - name: grafana-alert-rules
+    files:
+      - alert-rules.yaml
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_alert: "1"

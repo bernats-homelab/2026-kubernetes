@@ -1,0 +1,156 @@
+# Values do chart opentelemetry-collector (release otel-agent), versão em
+# kubernetes/apps/values.yaml. DaemonSet: logs dos pods, métricas do kubelet, OTLP
+# dos apps e scrape dos /metrics que já existem; tudo enriquecido com metadados do
+# k8s e enviado por OTLP ao otel-gateway. Veja docs/adr/008.
+mode: daemonset
+fullnameOverride: otel-agent
+
+image:
+  repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
+  tag: 0.163.2
+  digest: sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
+
+presets:
+  logsCollection:
+    enabled: true
+  kubernetesAttributes:
+    enabled: true
+  kubeletMetrics:
+    enabled: true
+
+# filelog lê /var/log/pods (root:root 0640 no host).
+securityContext:
+  runAsUser: 0
+  runAsGroup: 0
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+    add: [DAC_READ_SEARCH]
+
+# Apps falam OTLP com o Service otel-agent; nada de hostPort no notebook.
+ports:
+  otlp:
+    hostPort: 0
+  otlp-http:
+    hostPort: 0
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+
+service:
+  enabled: true
+
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    kubeletstats:
+      collection_interval: 30s
+    prometheus:
+      config:
+        scrape_configs:
+          # Substitui o scrape do próprio coletor (default do chart).
+          - job_name: argocd
+            scrape_interval: 60s
+            static_configs:
+              - targets:
+                  - argocd-application-controller-metrics.argocd.svc:8082
+                  - argocd-server-metrics.argocd.svc:8083
+                  - argocd-repo-server-metrics.argocd.svc:8084
+          # Postgres do CloudNativePG (cnpg_backends_total, max_connections...).
+          - job_name: cnpg
+            scrape_interval: 60s
+            kubernetes_sd_configs:
+              - role: pod
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_cnpg_io_podRole]
+                regex: instance
+                action: keep
+              - source_labels: [__meta_kubernetes_pod_container_port_name]
+                regex: metrics
+                action: keep
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+          # Immich (IMMICH_TELEMETRY_INCLUDE=all): API em :8081 e workers em :8082.
+          # "$$" é o "$" literal (o coletor expande ${...} na config).
+          - job_name: immich
+            scrape_interval: 60s
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names: [immich]
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+                regex: server
+                action: keep
+              - source_labels: [__meta_kubernetes_pod_ip]
+                regex: (.+)
+                replacement: $${1}:8081
+                target_label: __address__
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+          - job_name: immich-workers
+            scrape_interval: 60s
+            kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names: [immich]
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+                regex: server
+                action: keep
+              - source_labels: [__meta_kubernetes_pod_ip]
+                regex: (.+)
+                replacement: $${1}:8082
+                target_label: __address__
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+  processors:
+    resource:
+      attributes:
+        - key: k8s.cluster.name
+          value: homelab
+          action: upsert
+  exporters:
+    debug: null
+    otlp:
+      endpoint: otel-gateway.observability.svc:4317
+      tls:
+        insecure: true
+      sending_queue:
+        enabled: true
+        queue_size: 1000
+  service:
+    telemetry:
+      metrics:
+        level: none
+        readers: null
+    # Os presets acrescentam filelog, kubeletstats e k8sattributes aos pipelines.
+    pipelines:
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlp]
+      metrics:
+        receivers: [otlp, prometheus]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlp]
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlp]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi

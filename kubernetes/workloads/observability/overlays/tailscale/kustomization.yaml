@@ -1,0 +1,18 @@
+# Notebook: segredos do Grafana (admin e SMTP), contact point de e-mail e o
+# otel-gateway na tailnet. O Ingress do Grafana vem do chart (template da Application).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+resources:
+  - ../../base
+  - otel-service.yaml
+generators:
+  - secret-generator.yaml
+configMapGenerator:
+  - name: grafana-contact-points
+    files:
+      - contact-points.yaml
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_alert: "1"

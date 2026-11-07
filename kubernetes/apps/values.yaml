@@ -55,3 +55,25 @@ charts:
     repoURL: oci://ghcr.io/immich-app/immich-charts
     chart: immich
     version: 0.13.4
+  # Observabilidade (docs/adr/008). Os charts da Grafana migraram para grafana-community.
+  prometheus:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    version: 29.45.0
+  loki:
+    repoURL: https://grafana-community.github.io/helm-charts
+    chart: loki
+    version: 21.0.0
+  tempo:
+    repoURL: https://grafana-community.github.io/helm-charts
+    chart: tempo
+    version: 3.2.1
+  grafana:
+    repoURL: https://grafana-community.github.io/helm-charts
+    chart: grafana
+    version: 14.4.0
+  # Um chart, duas releases: otel-agent (DaemonSet) e otel-gateway (Deployment).
+  opentelemetryCollector:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    version: 0.178.2

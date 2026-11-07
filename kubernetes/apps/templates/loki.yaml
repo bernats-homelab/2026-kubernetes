@@ -1,0 +1,32 @@
+# Logs (recebe OTLP do otel-gateway). Veja docs/adr/008.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: {{ .Values.charts.loki.repoURL }}
+      chart: {{ .Values.charts.loki.chart }}
+      targetRevision: {{ .Values.charts.loki.version | quote }}
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/kubernetes/values/loki.yaml
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

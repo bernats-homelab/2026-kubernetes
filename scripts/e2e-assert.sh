@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world cloudnative-pg immich-database immich obsidian k8s-app-smoke grocery-ops; do
+for app in root argocd hello-world cloudnative-pg immich-database immich obsidian k8s-app-smoke grocery-ops prometheus loki tempo observability otel-gateway otel-agent grafana; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -75,4 +75,51 @@ if [[ "${health}" != "ok" ]]; then
   echo "ERRO: resposta inesperada do grocery-ops: '${health}'" >&2
   exit 1
 fi
+
+echo "==> Observabilidade: Grafana responde /api/health"
+kubectl -n observability rollout status deployment/grafana --timeout=600s
+grafana="$(kubectl get --raw /api/v1/namespaces/observability/services/grafana:80/proxy/api/health)"
+grep -q '"database": *"ok"' <<<"${grafana}" || {
+  echo "ERRO: resposta inesperada do Grafana: ${grafana}" >&2
+  exit 1
+}
+
+# retry <descrição> <comando...>: o pipeline (agent -> gateway -> backend) leva alguns minutos.
+retry() {
+  local what="$1" _
+  shift
+  for _ in $(seq 1 30); do
+    if "$@"; then return 0; fi
+    sleep 10
+  done
+  echo "ERRO: ${what} não apareceu em 5 min" >&2
+  return 1
+}
+
+prom_has_kubelet_metrics() {
+  kubectl get --raw '/api/v1/namespaces/observability/services/prometheus-server:80/proxy/api/v1/query?query=count(%7B__name__%3D~%22k8s_pod_.%2A%22%7D)' |
+    grep -q '"result":\[{'
+}
+echo "==> Observabilidade: métricas do kubelet chegaram ao Prometheus por OTLP"
+retry "métricas k8s_pod_* no Prometheus" prom_has_kubelet_metrics
+
+loki_has_argocd_logs() {
+  kubectl get --raw '/api/v1/namespaces/observability/services/loki:3100/proxy/loki/api/v1/query?query=count_over_time(%7Bk8s_namespace_name%3D%22argocd%22%7D%5B10m%5D)' |
+    grep -q '"result":\[{'
+}
+echo "==> Observabilidade: logs dos pods do ArgoCD chegaram ao Loki por OTLP"
+retry "logs do namespace argocd no Loki" loki_has_argocd_logs
+
+echo "==> Observabilidade: trace sintético (telemetrygen -> otel-agent -> gateway -> Tempo)"
+kubectl -n observability delete job e2e-telemetrygen --ignore-not-found
+kubectl -n observability create job e2e-telemetrygen \
+  --image=ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.163.0@sha256:569b79a39f8313db839a727e8eac161c66b8a6c2e633f2da4ad352ce7b383c23 \
+  -- /telemetrygen traces --otlp-endpoint=otel-agent.observability.svc:4317 --otlp-insecure --traces=5 --service=e2e-telemetrygen
+kubectl -n observability wait job/e2e-telemetrygen --for=condition=Complete --timeout=300s
+tempo_has_trace() {
+  kubectl get --raw '/api/v1/namespaces/observability/services/tempo:3200/proxy/api/search?tags=service.name%3De2e-telemetrygen' |
+    grep -q '"traceID"'
+}
+retry "trace do e2e-telemetrygen no Tempo" tempo_has_trace
+
 echo "OK: e2e passou."

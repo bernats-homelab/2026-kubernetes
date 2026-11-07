@@ -133,6 +133,27 @@ O Obsidian desktop roda no cluster ([linuxserver/obsidian](https://docs.linuxser
 
 **Edição em vários lugares.** Por NFS, o Obsidian do cluster não é avisado de mudanças feitas por outros dispositivos (Syncthing, SMB), porque o inotify não atravessa NFS. Edite num lugar por vez. Ao voltar para o Obsidian do navegador, use *Reload app without saving* (paleta de comandos) antes de editar, para não sobrescrever a versão mais nova.
 
+## Observabilidade (OpenTelemetry + Grafana)
+
+Logs, métricas e traces do cluster, do notebook e do NAS chegam por OTLP ao `otel-gateway` e seguem para Prometheus, Loki e Tempo, todos no namespace `observability`. Veja o [ADR 008](docs/adr/008-observability-otel-lgtm.md).
+
+- **Acesso:** `https://grafana.<sua-tailnet>`. O usuário e a senha do admin estão no SOPS:
+  ```bash
+  sops -d --extract '["stringData"]["admin-password"]' kubernetes/workloads/observability/overlays/tailscale/grafana-admin.sops.yaml
+  ```
+- **Alertas por e-mail (Gmail):** crie uma [senha de app](https://myaccount.google.com/apppasswords) e preencha `GF_SMTP_USER`, `GF_SMTP_PASSWORD`, `GF_SMTP_FROM_ADDRESS` e `ALERT_EMAIL_TO`. Troque também `GF_SMTP_ENABLED` para `"true"`:
+  ```bash
+  sops edit kubernetes/workloads/observability/overlays/tailscale/grafana-smtp.sops.yaml
+  ```
+  Faça push. Depois, em *Alerting → Contact points → email*, use *Test* para confirmar. As regras ficam em `kubernetes/workloads/observability/base/alert-rules.yaml`.
+- **Notebook (journald e métricas do host):** o role `otel_host_agent` instala o `otelcol-contrib` como serviço. Ligue-o no `local.yaml`, como var de host, com `otel_host_agent_enabled: true` e `otel_host_agent_endpoint: otel:4317`, e rode `make apply`.
+- **NAS (pela UI do OMV, uma vez):**
+  1. Instale o plugin `openmediavault-compose`. Em *Services → Compose → Files*, crie o stack `otel-collector` com o conteúdo de [`hosts/nas/otel-collector/compose.yaml`](hosts/nas/otel-collector/compose.yaml) e o `config.yaml` ao lado. Se o NAS não usar o MagicDNS da tailnet, troque `OTEL_GATEWAY` pelo FQDN `otel.<sua-tailnet>:4317`.
+  2. Em *System → Logs → Remote* (o nome varia com a versão do OMV), envie o syslog para `127.0.0.1`, porta `5140`, TCP.
+  3. O NAS aparece no Grafana com `job="nas-host"` (métricas) e `service_name="nas-host"` (logs).
+- **Retenção:** métricas por 30 dias (ou 6 GB), logs por 14 dias e traces por 7 dias, tudo no disco do notebook.
+- **Instrumentar um app:** envie OTLP para `otel-agent.observability.svc:4317` (gRPC) ou `:4318` (HTTP).
+
 ## Segredos de apps (KSOPS)
 
 1. Crie o Secret em texto claro ao lado do app, por exemplo `kubernetes/workloads/<app>/base/<nome>.sops.yaml`, e criptografe **no lugar**:
@@ -233,7 +254,7 @@ O `validate-manifests` baixa os schemas na primeira execução e os guarda em ca
 ### CI ([.github/workflows/ci.yaml](.github/workflows/ci.yaml))
 
 - **lint**: roda o pre-commit em todos os arquivos.
-- **render**: roda `helm unittest` e renderiza os charts upstream (argo-cd, tailscale-operator, cloudnative-pg, immich) com os nossos values, validando tudo com kubeconform.
+- **render**: roda `helm unittest` e renderiza os charts upstream (argo-cd, tailscale-operator, cloudnative-pg, immich, prometheus, loki, tempo, grafana, otel-agent/otel-gateway) com os nossos values, validando tudo com kubeconform.
 - **e2e**: no runner `ubuntu-26.04`:
   1. gera uma chave age efêmera com segredos dummy;
   2. roda o `site.yaml` completo com `tailscale_enabled=false`, sincronizando o próprio SHA do PR;
@@ -258,6 +279,7 @@ kubernetes/apps/      Helm chart app-of-apps (Applications do ArgoCD) + testes
 kubernetes/values/    values dos charts upstream
 kubernetes/workloads/ manifests (kustomize) dos workloads
 kubernetes/bootstrap/ Application raiz (template renderizado pelo Ansible)
+hosts/nas/            arquivos aplicados à mão no NAS pela UI do OMV (coletor OTel)
 scripts/              setup do controle e checagens usadas pelo pre-commit/CI (inclui o stub do KSOPS)
 tests/ci-age.key      chave age PÚBLICA de teste do CI (só o demo do hello-world)
 docs/adr/             decisões de arquitetura

@@ -1,0 +1,49 @@
+# Datasources, alertas e dashboards; provisionamento em kubernetes/workloads/observability. Veja docs/adr/008.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: {{ .Values.charts.grafana.repoURL }}
+      chart: {{ .Values.charts.grafana.chart }}
+      targetRevision: {{ .Values.charts.grafana.version | quote }}
+      helm:
+        releaseName: grafana
+        valueFiles:
+          - $values/kubernetes/values/grafana.yaml
+        {{- if .Values.tailscaleOperator.enabled }}
+        # Notebook: Ingress "grafana" na tailnet, admin e SMTP dos Secrets SOPS
+        # (kubernetes/workloads/observability/overlays/tailscale). No CI o chart
+        # gera a senha de admin e o SMTP fica desligado.
+        valuesObject:
+          ingress:
+            enabled: true
+            ingressClassName: tailscale
+            hosts: [grafana]
+            path: /
+            pathType: Prefix
+            tls:
+              - hosts: [grafana]
+          admin:
+            existingSecret: grafana-admin
+          envFromSecret: grafana-smtp
+        {{- end }}
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
