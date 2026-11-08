@@ -1,0 +1,196 @@
+{
+  "annotations": {"list": []},
+  "description": "Histórico das réplicas (tarefas Rsync do OMV, service_name=nas-rsync no Loki, 30 dias), capacidade dos discos e SMART do NAS. Escrito à mão: fora do dashboards.lock.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Réplicas concluídas no período",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "instant", "expr": "sum(count_over_time({service_name=\"nas-rsync\"} | rsync_event=\"summary\" [$__range]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "noValue": "0", "color": {"mode": "fixed", "fixedColor": "green"}}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "none", "textMode": "value"}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Erros do rsync no período",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "instant", "expr": "sum(count_over_time({service_name=\"nas-rsync\"} | rsync_event=\"error\" [$__range]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "noValue": "0", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "none", "textMode": "value"}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Tamanho do backup (última réplica)",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "instant", "expr": "max(last_over_time({service_name=\"nas-rsync\"} | rsync_event=\"summary\" | unwrap rsync_total_size_bytes [$__range]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes", "decimals": 1}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "none", "graphMode": "none", "textMode": "value"}
+    },
+    {
+      "id": 4,
+      "type": "bargauge",
+      "title": "Uso dos discos de dados",
+      "description": "used / (used + free), como o df. Alertas: réplica 70/85/95%, primário 80/90/95%.",
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "instant": true, "legendFormat": "{{nas_role}}", "expr": "sum by (nas_role) (system_filesystem_usage_bytes{job=\"nas-host\", nas_role=~\"primary|replica\", state=\"used\"}) / sum by (nas_role) (system_filesystem_usage_bytes{job=\"nas-host\", nas_role=~\"primary|replica\", state=~\"used|free\"})"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.7}, {"color": "orange", "value": 0.85}, {"color": "red", "value": 0.95}]}}, "overrides": []},
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true, "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Tamanho do backup por dia",
+      "description": "\"total size is\" de cada réplica (o tamanho de data-with-backup).",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "interval": "1d",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "range", "legendFormat": "backup", "expr": "max(max_over_time({service_name=\"nas-rsync\"} | rsync_event=\"summary\" | unwrap rsync_total_size_bytes [$__interval]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"drawStyle": "line", "lineWidth": 2, "pointSize": 6, "showPoints": "always", "spanNulls": true, "fillOpacity": 10}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": false}, "tooltip": {"mode": "single"}}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Uso dos discos (histórico)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "legendFormat": "{{nas_role}}", "expr": "sum by (nas_role) (system_filesystem_usage_bytes{job=\"nas-host\", nas_role=~\"primary|replica\", state=\"used\"}) / sum by (nas_role) (system_filesystem_usage_bytes{job=\"nas-host\", nas_role=~\"primary|replica\", state=~\"used|free\"})"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "thresholdsStyle": {"mode": "dashed"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "transparent", "value": null}, {"color": "orange", "value": 0.85}, {"color": "red", "value": 0.95}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Dados enviados por dia",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
+      "interval": "1d",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "range", "legendFormat": "enviado", "expr": "sum(sum_over_time({service_name=\"nas-rsync\"} | rsync_event=\"stats\" | unwrap rsync_sent_bytes [$__interval]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes", "custom": {"drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": false}, "tooltip": {"mode": "single"}}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Duração da réplica",
+      "description": "Estimada pelo próprio rsync: (enviados + recebidos) / bytes/sec.",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 12},
+      "interval": "1d",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "range", "legendFormat": "duração", "expr": "max(max_over_time({service_name=\"nas-rsync\"} | rsync_event=\"stats\" | unwrap rsync_duration_seconds [$__interval]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "s", "custom": {"drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": false}, "tooltip": {"mode": "single"}}
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Arquivos copiados e apagados por dia",
+      "description": "Apagados só aparecem na tarefa de domingo (com --delete).",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 12},
+      "interval": "1d",
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "range", "legendFormat": "{{rsync_event}}", "expr": "sum by (rsync_event) (count_over_time({service_name=\"nas-rsync\"} | rsync_event=~\"transfer|delete\" [$__interval]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "custom": {"drawStyle": "bars", "fillOpacity": 70, "lineWidth": 1, "stacking": {"mode": "normal"}}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "SSD: vida restante",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "legendFormat": "{{device}}", "expr": "min by (device) (smartctl_device_attribute{job=\"nas-host\", attribute_value_type=\"value\", attribute_name=~\"SSD_Life_Left|Percent_Lifetime_Remain|Wear_Leveling_Count|Media_Wearout_Indicator|Remaining_Lifetime_Perc\"})"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100, "custom": {"drawStyle": "line", "lineWidth": 2, "thresholdsStyle": {"mode": "dashed"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "transparent", "value": 20}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "SMART: erros de CRC e de mídia",
+      "description": "CRC = caminho (conector, cabo, ponte USB). Realocados, pendentes e falhas de gravação = mídia.",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "legendFormat": "{{device}} {{attribute_name}}", "expr": "max by (device, attribute_name) (smartctl_device_attribute{job=\"nas-host\", attribute_value_type=\"raw\", attribute_name=~\"SATA_CRC_Error_Count|UDMA_CRC_Error_Count|Reallocated_Sector_Ct|Reallocated_Event_Count|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Program_Fail_Count|Erase_Fail_Count\"})"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "none", "custom": {"drawStyle": "line", "lineWidth": 1}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true, "calcs": ["lastNotNull"]}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Temperatura dos discos",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus"}, "legendFormat": "{{device}}", "expr": "max by (device) (smartctl_device_temperature{job=\"nas-host\", temperature_type=\"current\"})"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "celsius", "custom": {"drawStyle": "line", "lineWidth": 2, "thresholdsStyle": {"mode": "dashed"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "transparent", "value": null}, {"color": "red", "value": 60}]}}, "overrides": []},
+      "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 13,
+      "type": "logs",
+      "title": "Execuções do rsync",
+      "description": "Início, resumo, erros e avisos de cada tarefa (sem a lista de arquivos).",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 28},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "range", "expr": "{service_name=\"nas-rsync\"} | rsync_event=~\"start|stats|summary|error|warning\""}
+      ],
+      "options": {"showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true, "dedupStrategy": "none"}
+    },
+    {
+      "id": 14,
+      "type": "logs",
+      "title": "Tarefas abortadas pelo OMV e erros de USB",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38},
+      "datasource": {"type": "loki", "uid": "loki"},
+      "targets": [
+        {"refId": "A", "datasource": {"type": "loki", "uid": "loki"}, "queryType": "range", "expr": "{service_name=\"nas-host\"} | appname=~\"rsync-.*\" or appname=\"kernel\" |~ \"rsync-|error -71|USB disconnect\""}
+      ],
+      "options": {"showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true, "dedupStrategy": "none"}
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["nas", "backup"],
+  "templating": {"list": []},
+  "time": {"from": "now-30d", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "NAS - Replicação e discos",
+  "uid": "nas-replicacao",
+  "version": 1
+}

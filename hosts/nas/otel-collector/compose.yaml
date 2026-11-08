@@ -1,10 +1,30 @@
 # OpenTelemetry Collector do NAS (openmediavault). NÃO é aplicado pelo Ansible:
 # cole este arquivo inteiro no plugin compose do OMV (Services -> Compose -> Files).
 # A configuração vai embutida (configs.content): nada para copiar por SMB.
-# Métricas do host (via /hostfs) e syslog do OMV -> gateway OTLP do cluster na
-# tailnet ("otel", resolvido pelo MagicDNS). service.name=nas-host vira job no
-# Prometheus e service_name no Loki; o alerta "NAS sem métricas" depende dele.
+# Métricas do host (via /hostfs), SMART dos discos (smartctl-exporter), syslog do OMV
+# e o log das tarefas Rsync do OMV -> gateway OTLP do cluster na tailnet ("otel",
+# resolvido pelo MagicDNS). service.name=nas-host vira job no Prometheus e
+# service_name no Loki; o alerta "NAS sem métricas" depende dele. O log do rsync vai
+# como service_name=nas-rsync, que o Loki guarda por 30 dias (histórico das réplicas).
+# Literais "$" na config embutida são "$$" (o compose interpola ${...}).
 services:
+  smartctl-exporter:
+    # yamllint disable-line rule:line-length
+    image: prometheuscommunity/smartctl-exporter:v0.15.0@sha256:a76e08dbf5db4781fefd1ed81c65ad46ae8d2849dae6b6d3acebcde2fc4e59d6
+    container_name: smartctl-exporter
+    restart: unless-stopped
+    # O smartctl fala direto com os discos (ATA pass-through, inclusive o SSD no case
+    # USB via -d sat): exige privileged e root. Só leitura de SMART; ouve em localhost
+    # e quem raspa é o otel-collector.
+    privileged: true
+    user: root
+    network_mode: host
+    mem_limit: 64m
+    command:
+      - --web.listen-address=127.0.0.1:9633
+      - --smartctl.interval=300s
+
+
   otel-collector:
     # yamllint disable-line rule:line-length
     image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
@@ -17,6 +37,8 @@ services:
     # container fica no SSD (Docker storage), e a fila do exporter é só em memória.
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    # Grupo adm (gid 4 no Debian): lê o /var/log/rsync.log (root:adm 0640).
+    group_add: ["4"]
     mem_limit: 256m
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     configs:
@@ -51,6 +73,38 @@ configs:
             listen_address: 127.0.0.1:5140
           protocol: rfc3164
           location: America/Sao_Paulo
+        # SMART dos discos (serviço smartctl-exporter acima). 5 min basta: atributos
+        # de desgaste e erro mudam devagar.
+        prometheus/smart:
+          config:
+            scrape_configs:
+              - job_name: smartctl
+                scrape_interval: 5m
+                static_configs:
+                  - targets: [127.0.0.1:9633]
+                metric_relabel_configs:
+                  - source_labels: [__name__]
+                    regex: smartctl_device|smartctl_device_(attribute|smart_status|temperature|smartctl_exit_status)
+                    action: keep
+        # Log das tarefas Rsync do OMV (--log-file=/var/log/rsync.log, em tmpfs pelo
+        # writecache). Uma linha por evento: "AAAA/MM/DD hh:mm:ss [pid] mensagem".
+        # start_at end: sem storage em disco (pendrive), um restart perde no máximo
+        # as linhas escritas enquanto o coletor estava parado.
+        file_log/rsync:
+          include: [/hostfs/var/log/rsync.log]
+          start_at: end
+          operators:
+            - type: regex_parser
+              regex: '^(?P<time>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) \[(?P<rsync_pid>\d+)\] (?P<rsync_msg>.*)$$'
+              on_error: send_quiet
+              timestamp:
+                parse_from: attributes.time
+                layout_type: strptime
+                layout: '%Y/%m/%d %H:%M:%S'
+                location: America/Sao_Paulo
+            - type: remove
+              field: attributes.time
+              on_error: send_quiet
 
       processors:
         memory_limiter:
@@ -65,6 +119,57 @@ configs:
             - key: service.name
               value: nas-host
               action: upsert
+        # Papel de cada disco (label nas_role) para os alertas de capacidade em
+        # base/alerts/nas.yaml. Os mountpoints (/srv/dev-disk-by-uuid-...) vêm do .env
+        # do stack, NAS_PRIMARY_MOUNT e NAS_REPLICA_MOUNT; sem eles nada casa.
+        transform/nas_role:
+          error_mode: ignore
+          metric_statements:
+            - statements:
+                - set(datapoint.attributes["nas_role"], "primary") where datapoint.attributes["mountpoint"] == "${NAS_PRIMARY_MOUNT:-}"
+                - set(datapoint.attributes["nas_role"], "replica") where datapoint.attributes["mountpoint"] == "${NAS_REPLICA_MOUNT:-}"
+        resource/rsync:
+          attributes:
+            - key: service.name
+              value: nas-rsync
+              action: upsert
+        # Classifica as linhas do rsync (atributo rsync_event, structured metadata no
+        # Loki) e extrai os números dos resumos, sem as vírgulas de milhar:
+        #   "sent X bytes  received Y bytes  Z bytes/sec" -> stats (+ duração estimada)
+        #   "total size is N  speedup is S"                -> summary (fim com sucesso)
+        transform/rsync:
+          error_mode: ignore
+          # Statements longos quebram em linhas: o YAML junta a string com espaços.
+          log_statements:
+            - statements:
+                - 'set(log.attributes["rsync_event"], "start") where log.attributes["rsync_msg"] == "building file list"'
+                - 'set(log.attributes["rsync_event"], "transfer") where IsMatch(log.attributes["rsync_msg"], "^[<>c][fLDS]")'
+                - 'set(log.attributes["rsync_event"], "attrs") where IsMatch(log.attributes["rsync_msg"], "^\\.[fdLDS]")'
+                - 'set(log.attributes["rsync_event"], "delete") where IsMatch(log.attributes["rsync_msg"], "^\\*deleting")'
+                - 'set(log.attributes["rsync_event"], "error") where IsMatch(log.attributes["rsync_msg"], "^rsync error")'
+                - 'set(log.attributes["rsync_event"], "warning") where IsMatch(log.attributes["rsync_msg"], "^rsync warning")'
+                - 'merge_maps(log.attributes, ExtractPatterns(log.attributes["rsync_msg"],
+                  "\\(code (?P<rsync_exit_code>[0-9]+)\\)"), "upsert")
+                  where log.attributes["rsync_event"] == "error" or log.attributes["rsync_event"] == "warning"'
+                - 'set(log.attributes["rsync_event"], "stats") where IsMatch(log.attributes["rsync_msg"], "^sent [0-9,]+ bytes")'
+                - 'merge_maps(log.attributes, ExtractPatterns(log.attributes["rsync_msg"],
+                  "^sent (?P<rsync_sent_bytes>[0-9,]+) bytes +received (?P<rsync_received_bytes>[0-9,]+) bytes +(?P<rsync_rate>[0-9,.]+) bytes/sec"),
+                  "upsert") where log.attributes["rsync_event"] == "stats"'
+                - 'set(log.attributes["rsync_event"], "summary") where IsMatch(log.attributes["rsync_msg"], "^total size is ")'
+                - 'merge_maps(log.attributes, ExtractPatterns(log.attributes["rsync_msg"],
+                  "^total size is (?P<rsync_total_size_bytes>[0-9,]+)"), "upsert")
+                  where log.attributes["rsync_event"] == "summary"'
+                - 'replace_pattern(log.attributes["rsync_sent_bytes"], ",", "") where log.attributes["rsync_sent_bytes"] != nil'
+                - 'replace_pattern(log.attributes["rsync_received_bytes"], ",", "") where log.attributes["rsync_received_bytes"] != nil'
+                - 'replace_pattern(log.attributes["rsync_rate"], ",", "") where log.attributes["rsync_rate"] != nil'
+                - 'replace_pattern(log.attributes["rsync_total_size_bytes"], ",", "") where log.attributes["rsync_total_size_bytes"] != nil'
+                # O rsync calcula bytes/sec = (enviados + recebidos) / tempo total.
+                - 'set(log.attributes["rsync_duration_seconds"],
+                  Int((Double(log.attributes["rsync_sent_bytes"]) + Double(log.attributes["rsync_received_bytes"]))
+                  / Double(log.attributes["rsync_rate"])))
+                  where log.attributes["rsync_event"] == "stats" and log.attributes["rsync_rate"] != "0.00"'
+                # A mensagem já é o corpo do log.
+                - 'delete_key(log.attributes, "rsync_msg")'
         batch: {}
 
       exporters:
@@ -84,10 +189,14 @@ configs:
             level: none
         pipelines:
           metrics:
-            receivers: [hostmetrics]
-            processors: [memory_limiter, resourcedetection, resource, batch]
+            receivers: [hostmetrics, prometheus/smart]
+            processors: [memory_limiter, resourcedetection, resource, transform/nas_role, batch]
             exporters: [otlp]
           logs:
             receivers: [syslog]
             processors: [memory_limiter, resourcedetection, resource, batch]
+            exporters: [otlp]
+          logs/rsync:
+            receivers: [file_log/rsync]
+            processors: [memory_limiter, resourcedetection, resource/rsync, transform/rsync, batch]
             exporters: [otlp]

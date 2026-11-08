@@ -36,6 +36,14 @@ configMapGenerator:
         grafana_dashboard: "1"
       annotations:
         grafana_folder: Hosts
+  - name: grafana-dashboard-nas-replicacao
+    files:
+      - Hosts/nas-replicacao.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Hosts
   - name: grafana-dashboard-cluster
     files:
       - Kubernetes/cluster.json

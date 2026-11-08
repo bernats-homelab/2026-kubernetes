@@ -1,0 +1,555 @@
+# Regras de capacidade do NAS: checkpoints de compra de disco, não só "disco cheio".
+# Setup: SSD primário (data-with-backup + data-without-backup) e SSD de réplica via
+# USB, que guarda só a cópia de data-with-backup. Logo, o uso da réplica é o tamanho
+# do backup. O label nas_role (primary/replica) vem do collector do NAS
+# (hosts/nas/otel-collector/compose.yaml), que casa o mountpoint com NAS_PRIMARY_MOUNT
+# e NAS_REPLICA_MOUNT do .env do stack: os paths do NAS não ficam no repo.
+# Uso = used / (used + free), como o df: o espaço reservado do ext4 não entra.
+# Faixas exclusivas (expr com "<" no topo): cada nível dispara sozinho, sem repetir
+# o de baixo.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: nas
+    folder: Homelab
+    interval: 5m
+    rules:
+      - uid: nas-replica-plan
+        title: Réplica do backup acima de 70%
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: info}
+        annotations:
+          summary: >-
+            Réplica em {{ humanizePercentage $values.A.Value }}: comece a pesquisar o disco de backup
+            maior (HDD de 3,5" com fonte própria) ou reveja o que está em data-with-backup
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="replica", state="used"})
+                / sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="replica",
+                state=~"used|free"}) < 0.85
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.7]}
+
+      - uid: nas-replica-buy
+        title: Réplica do backup acima de 85%
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            Réplica em {{ humanizePercentage $values.A.Value }}: hora de comprar o disco de backup maior
+            (a entrega pode levar semanas)
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="replica", state="used"})
+                / sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="replica",
+                state=~"used|free"}) < 0.95
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.85]}
+
+      - uid: nas-replica-full
+        title: Réplica do backup acima de 95%
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: >-
+            Réplica em {{ humanizePercentage $values.A.Value }}: o próximo backup pode falhar; pare de
+            colocar coisas em data-with-backup até o disco novo chegar
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="replica", state="used"})
+                / sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="replica",
+                state=~"used|free"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.95]}
+
+      - uid: nas-primary-plan
+        title: Disco primário do NAS acima de 80%
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: info}
+        annotations:
+          summary: >-
+            Primário em {{ humanizePercentage $values.A.Value }}: planeje o HDD no caddy do UltraBay
+            para tirar data-without-backup do SSD
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="primary", state="used"})
+                / sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="primary",
+                state=~"used|free"}) < 0.9
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+
+      - uid: nas-primary-buy
+        title: Disco primário do NAS acima de 90%
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "Primário em {{ humanizePercentage $values.A.Value }}: hora de comprar o HDD e o caddy do UltraBay"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="primary", state="used"})
+                / sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="primary",
+                state=~"used|free"}) < 0.95
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.9]}
+
+      - uid: nas-primary-full
+        title: Disco primário do NAS acima de 95%
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: >-
+            Primário em {{ humanizePercentage $values.A.Value }}: o Immich e os uploads vão falhar em
+            breve; libere espaço em data-without-backup
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="primary", state="used"})
+                / sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host", nas_role="primary",
+                state=~"used|free"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.95]}
+
+      # Compra com antecedência: uma importação grande enche rápido e a entrega leva
+      # semanas. Tendência dos últimos 7 dias (a retenção do Prometheus é 30d).
+      - uid: nas-disk-fill-90d
+        title: Disco do NAS enche em 3 meses
+        condition: B
+        for: 6h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.nas_role }}: no ritmo dos últimos 7 dias, o disco enche em menos de 3 meses"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                predict_linear(sum by (nas_role) (system_filesystem_usage_bytes{job="nas-host",
+                nas_role=~"primary|replica", state="free"})[7d:1h], 90 * 86400)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [0]}
+
+      # O SSD de réplica já caiu uma vez com "error -71" no USB. Só alerta se o NAS
+      # está mandando métricas (o nas-silent cobre o NAS fora do ar). Também dispara
+      # se NAS_REPLICA_MOUNT não estiver no .env do stack.
+      - uid: nas-replica-missing
+        title: Disco de réplica do NAS ausente
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            O filesystem de réplica sumiu das métricas há 30 min (desconectado, não montado ou
+            NAS_REPLICA_MOUNT errado): os backups não estão acontecendo
+        data:
+          - refId: A
+            relativeTimeRange: {from: 1800, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                absent_over_time(system_filesystem_usage_bytes{job="nas-host", nas_role="replica"}[30m]) and on ()
+                count(present_over_time(system_cpu_load_average_1m{job="nas-host"}[10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Erro de protocolo USB (cabo, case ou energia): foi o que derrubou a réplica.
+      # O rsyslog do OMV encaminha *.* e as mensagens do kernel chegam com
+      # appname=kernel (conferido em 2026-11-08).
+      - uid: nas-usb-error
+        title: Erro de USB no NAS
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            {{ $values.A.Value }} erros de USB (error -71) no NAS nos últimos 10 min: troque o cabo ou o
+            case antes de suspeitar do disco
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: sum(count_over_time({service_name="nas-host"} | appname="kernel" |= "error -71" [10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # --- Replicação (tarefas Rsync do OMV; log em service_name=nas-rsync) ---
+      # Toda execução que termina bem grava "total size is ..." (rsync_event=summary).
+      # As tarefas rodam todo dia às 03:00: 26h sem resumo = uma réplica perdida.
+      - uid: nas-rsync-stale
+        title: Réplica do NAS sem execução bem-sucedida em 26h
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            Nenhuma tarefa Rsync terminou com sucesso nas últimas 26h: o backup de data-with-backup
+            está desatualizado (veja os logs de service_name=nas-rsync e nas-host)
+        data:
+          - refId: A
+            relativeTimeRange: {from: 93600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: absent_over_time({service_name="nas-rsync"} | rsync_event="summary" [26h])
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      - uid: nas-rsync-error
+        title: Tarefa Rsync do NAS terminou com erro
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            O rsync da réplica registrou {{ $values.A.Value }} erro(s) na última hora (o código fica no
+            atributo rsync_exit_code; 23 = arquivos não copiados, 11/12 = disco ou conexão)
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: sum(count_over_time({service_name="nas-rsync"} | rsync_event="error" [1h]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # O script da tarefa (gerado pelo OMV) aborta antes do rsync se a origem ou o
+      # destino não estiver montado, e registra no syslog com a tag rsync-<uuid>.
+      - uid: nas-rsync-skipped
+        title: Tarefa Rsync do NAS não rodou
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            A tarefa Rsync do OMV abortou na última hora (em geral, disco de origem ou de réplica não
+            montado): veja os logs de service_name=nas-host com appname rsync-*
+        data:
+          - refId: A
+            relativeTimeRange: {from: 3600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: sum(count_over_time({service_name="nas-host"} | appname=~"rsync-.*" [1h]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # --- SMART (smartctl-exporter no NAS, raspado pelo collector) ---
+      - uid: nas-smart-failed
+        title: SMART do disco do NAS reprovado
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.device }}: o próprio disco reporta falha no SMART; troque-o e confira a réplica"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: min by (device) (smartctl_device_smart_status{job="nas-host"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+
+      # Contadores que só sobem quando a mídia falha: qualquer aumento em 24h conta.
+      - uid: nas-smart-errors-growing
+        title: Erros de mídia aumentando em disco do NAS
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            {{ $labels.device }}: {{ $labels.attribute_name }} subiu {{ $values.A.Value }} em 24h;
+            planeje a troca do disco
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (device, attribute_name) (delta(smartctl_device_attribute{job="nas-host", attribute_value_type="raw",
+                attribute_name=~"Reallocated_.*|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Program_Fail_Count|Erase_Fail_Count|Runtime_Bad_Block"}[1d]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # CRC sobe por problema no caminho (conector SATA, cabo, ponte USB), não na mídia.
+      - uid: nas-smart-crc-growing
+        title: Erros de CRC aumentando em disco do NAS
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            {{ $labels.device }}: {{ $labels.attribute_name }} subiu {{ $values.A.Value }} em 24h;
+            confira o conector, o cabo ou o case antes de culpar o disco
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (device, attribute_name) (delta(smartctl_device_attribute{job="nas-host",
+                attribute_value_type="raw", attribute_name=~"SATA_CRC_Error_Count|UDMA_CRC_Error_Count|CRC_Error_Count"}[1d]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Vida restante normalizada (100 = novo). 20% = 80% de desgaste: hora de trocar.
+      - uid: nas-ssd-wear
+        title: SSD do NAS com menos de 20% de vida
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.device }}: vida restante do SSD em {{ $values.A.Value }}%; compre o substituto"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                min by (device) (smartctl_device_attribute{job="nas-host", attribute_value_type="value",
+                attribute_name=~"SSD_Life_Left|Percent_Lifetime_Remain|Wear_Leveling_Count|Media_Wearout_Indicator|Remaining_Lifetime_Perc"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [20]}
+
+      - uid: nas-disk-temp
+        title: Disco do NAS acima de 60 °C
+        condition: B
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.device }}: {{ $values.A.Value }} °C há 30 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 900, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: max by (device) (smartctl_device_temperature{job="nas-host", temperature_type="current"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [60]}
+
+      # O NAS manda métricas, mas nenhum SMART: o smartctl-exporter parou ou não subiu.
+      - uid: nas-smart-missing
+        title: SMART do NAS sem dados
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: info}
+        annotations:
+          summary: "O NAS não envia SMART há 30 min: confira o container smartctl-exporter no stack do OMV"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 1800, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                absent_over_time(smartctl_device_smart_status{job="nas-host"}[30m]) and on ()
+                count(present_over_time(system_cpu_load_average_1m{job="nas-host"}[10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
