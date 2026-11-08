@@ -281,6 +281,9 @@ tests:
       - equal:
           path: spec.sources[0].helm.valuesObject.envFromSecret
           value: grafana-smtp
+      - equal:
+          path: spec.sources[0].helm.valuesObject.envFromSecrets[0].name
+          value: grafana-public-url
 
   - it: sem Tailscale (CI) o Grafana não tem Ingress nem Secrets e o provisionamento usa base
     set:
