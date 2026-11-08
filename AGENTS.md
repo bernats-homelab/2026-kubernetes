@@ -21,6 +21,7 @@
 - Variáveis registradas/definidas em roles levam o prefixo do role (ansible-lint `production`)
 - Todo `command`/`shell` tem `changed_when`/`creates`; o e2e exige changed=0 na segunda execução
 - Mudança de versão de chart: só em `kubernetes/apps/values.yaml`
+- Dashboards do Grafana: só pelo `scripts/vendor-dashboards.sh` (versão + sha256 no `dashboards.lock`, ajustes em `patches/*.jq`); nunca cole JSON de dashboard na mão (os próprios ficam em `dashboards/<pasta>/` fora do lock). Regras de alerta: `base/alerts/*.yaml`, com `severity` critical, warning ou info
 - Apps externas sempre por tag `vX.Y.Z` (nunca branch) e no AppProject `homelab-apps`; credencial da GitHub App e do GHCR só em `ansible/secrets/` (opcionais)
 - Segredos de apps: `*.sops.yaml` ao lado do app + generator KSOPS; criptografe no caminho final (o `.sops.yaml` escolhe os destinatários). Nunca use a chave de teste do CI (`tests/ci-age.key`, pública) fora de `kubernetes/workloads/hello-world/`
 - Segredos do bootstrap (`ansible/secrets/`) são só da chave do WSL

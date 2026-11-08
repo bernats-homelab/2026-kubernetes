@@ -1,0 +1,295 @@
+# Regras do Grafana Alerting, carregadas pelo sidecar (label grafana_alert).
+# Derivadas de regras da comunidade (origem em cada comentário), reescritas para os
+# nomes OTel que chegam ao Prometheus por OTLP. Hosts se distinguem por host_name
+# (service.name vira o label job). Severidades: critical e warning chegam por e-mail;
+# info só aparece na UI (veja a política em overlays/tailscale/contact-points.yaml).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: observability
+    folder: Homelab
+    interval: 1m
+    rules:
+      # Origem: Watchdog / PrometheusNotIngestingSamples
+      - uid: pipeline-dead
+        title: Nenhuma métrica do cluster chegando
+        condition: B
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "Nada chegou ao Prometheus nos últimos 5 min: o otel-agent, o otel-gateway ou o Prometheus pararam"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                absent_over_time(k8s_node_cpu_usage[5m])
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), PrometheusTargetMissing
+      - uid: scrape-target-down
+        title: Alvo de scrape fora do ar
+        condition: B
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "O alvo {{ $labels.job }} ({{ $labels.instance }}) não responde ao scrape do otel-agent"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                1 - up{job=~"(.+/)?(argocd.*|cnpg|immich.*|loki|tempo|prometheus|coredns)"}
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts, OpenTelemetry Collector, ExporterFailed*
+      - uid: otel-export-failed
+        title: Coletor falhando ao exportar
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }}: o exporter {{ $labels.exporter }} está falhando"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (job, exporter) (rate({__name__=~"otelcol_exporter_send_failed_.+"}[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts, OpenTelemetry Collector, ExporterEnqueueFailed*
+      - uid: otel-data-dropped
+        title: Coletor descartando dados
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }}: a fila do exporter {{ $labels.exporter }} está descartando dados"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (job, exporter) (rate({__name__=~"otelcol_exporter_enqueue_failed_.+"}[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts, OpenTelemetry Collector, ExporterQueueNearlyFull
+      - uid: otel-queue-full
+        title: Fila do exporter quase cheia
+        condition: B
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }}: a fila do exporter {{ $labels.exporter }} está em {{ humanizePercentage $values.A.Value }}"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (job, exporter) (otelcol_exporter_queue_size / otelcol_exporter_queue_capacity)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+
+      # Origem: awesome-prometheus-alerts, OpenTelemetry Collector, ReceiverRefused*
+      - uid: otel-receiver-refused
+        title: Coletor recusando dados
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }}: o receiver {{ $labels.receiver }} recusa dados (memory_limiter?)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (job, receiver) (rate({__name__=~"otelcol_receiver_refused_.+"}[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), Prometheus self-monitoring (4 regras)
+      - uid: prometheus-tsdb-failing
+        title: TSDB do Prometheus com falhas
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "O Prometheus registrou {{ $values.A.Value }} falha(s) de compactação, WAL ou truncamento na última hora"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum(increase(prometheus_tsdb_compactions_failed_total[1h])) +
+                sum(increase(prometheus_tsdb_wal_corruptions_total[1h])) +
+                sum(increase(prometheus_tsdb_head_truncations_failed_total[1h])) +
+                sum(increase(prometheus_tsdb_reloads_failures_total[1h]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), LokiRequestErrors
+      - uid: loki-request-errors
+        title: Loki com erros 5xx
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ humanizePercentage $values.A.Value }} das requisições ao Loki dão 5xx"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[5m])) /
+                sum(rate(loki_request_duration_seconds_count[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.1]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), LokiRequestPanic
+      - uid: loki-panic
+        title: Loki entrou em panic
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "O Loki registrou {{ $values.A.Value }} panic(s) nos últimos 10 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum(increase(loki_panic_total[10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), TempoCompactionsFailing
+      - uid: tempo-compaction-failing
+        title: Compactação do Tempo falhando
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "O Tempo falhou {{ $values.A.Value }}x na compactação na última hora"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum(increase(tempodb_compaction_errors_total[1h]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [2]}

@@ -10,6 +10,15 @@ contactPoints:
         settings:
           addresses: $ALERT_EMAIL_TO
           singleEmail: true
+# Intervalo que cobre o dia inteiro: uma rota com mute_time_intervals: [always]
+# nunca notifica (o alerta continua visível na UI do Grafana).
+muteTimes:
+  - orgId: 1
+    name: always
+    time_intervals:
+      - times:
+          - start_time: "00:00"
+            end_time: "24:00"
 policies:
   - orgId: 1
     receiver: email
@@ -17,3 +26,19 @@ policies:
     group_wait: 1m
     group_interval: 10m
     repeat_interval: 12h
+    # critical e warning chegam por e-mail em ritmos diferentes; info só aparece na UI.
+    routes:
+      - receiver: email
+        object_matchers:
+          - ["severity", "=", "critical"]
+        group_wait: 30s
+        repeat_interval: 4h
+      - receiver: email
+        object_matchers:
+          - ["severity", "=", "warning"]
+        group_interval: 30m
+        repeat_interval: 24h
+      - receiver: email
+        object_matchers:
+          - ["severity", "=", "info"]
+        mute_time_intervals: [always]

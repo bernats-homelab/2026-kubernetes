@@ -1,20 +1,93 @@
 # OpenTelemetry Collector do NAS (openmediavault). NÃO é aplicado pelo Ansible:
-# cole no plugin compose do OMV (Services -> Compose -> Files), como no README.
-# OTEL_GATEWAY: nome MagicDNS do gateway do cluster na tailnet + porta, ex.: otel:4317.
+# cole este arquivo inteiro no plugin compose do OMV (Services -> Compose -> Files).
+# A configuração vai embutida (configs.content): nada para copiar por SMB.
+# Métricas do host (via /hostfs) e syslog do OMV -> gateway OTLP do cluster na
+# tailnet ("otel", resolvido pelo MagicDNS). service.name=nas-host vira job no
+# Prometheus e service_name no Loki; o alerta "NAS sem métricas" depende dele.
 services:
   otel-collector:
     # yamllint disable-line rule:line-length
     image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.163.2@sha256:7f22d2a6748110ffb6a59bc0df448bccbf501cdb667d610ede4c61d3863d5849
     container_name: otel-collector
     restart: unless-stopped
-    # Host: lê as interfaces e o syslog do próprio NAS em 127.0.0.1.
+    # Host: lê as interfaces e recebe o syslog do próprio NAS em 127.0.0.1.
     network_mode: host
-    # Nada gravado em disco (o sistema roda num pendrive): fila só em memória.
-    read_only: true
+    # Sem read_only: o Compose grava o configs.content no container na criação
+    # ("`file` is the sole supported option" em serviço read-only). A camada do
+    # container fica no SSD (Docker storage), e a fila do exporter é só em memória.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     mem_limit: 256m
-    environment:
-      OTEL_GATEWAY: ${OTEL_GATEWAY:-otel:4317}
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    configs:
+      - source: otel-config
+        target: /etc/otelcol-contrib/config.yaml
     volumes:
-      - ./config.yaml:/etc/otelcol-contrib/config.yaml:ro
       - /:/hostfs:ro
+
+configs:
+  otel-config:
+    # O compose interpola ${...}: OTEL_GATEWAY pode vir do .env do stack.
+    content: |
+      receivers:
+        hostmetrics:
+          root_path: /hostfs
+          collection_interval: 30s
+          scrapers:
+            cpu: {}
+            load: {}
+            memory: {}
+            paging: {}
+            disk: {}
+            network: {}
+            filesystem:
+              exclude_fs_types:
+                fs_types: [autofs, cgroup2, devtmpfs, nsfs, overlay, proc, squashfs, sysfs, tmpfs, tracefs]
+                match_type: strict
+        # O OMV encaminha o syslog para cá (Diagnostics -> System Logs -> Remote:
+        # host 127.0.0.1, porta 5140, TCP).
+        syslog:
+          tcp:
+            listen_address: 127.0.0.1:5140
+          protocol: rfc3164
+          location: America/Sao_Paulo
+
+      processors:
+        memory_limiter:
+          check_interval: 5s
+          limit_mib: 200
+        resourcedetection:
+          detectors: [system]
+          system:
+            hostname_sources: [os]
+        resource:
+          attributes:
+            - key: service.name
+              value: nas-host
+              action: upsert
+        batch: {}
+
+      exporters:
+        otlp:
+          endpoint: ${OTEL_GATEWAY:-otel:4317}
+          # Tráfego já cifrado pelo WireGuard da tailnet.
+          tls:
+            insecure: true
+          # Em memória: o NAS não aguenta escrita contínua no pendrive.
+          sending_queue:
+            enabled: true
+            queue_size: 500
+
+      service:
+        telemetry:
+          metrics:
+            level: none
+        pipelines:
+          metrics:
+            receivers: [hostmetrics]
+            processors: [memory_limiter, resourcedetection, resource, batch]
+            exporters: [otlp]
+          logs:
+            receivers: [syslog]
+            processors: [memory_limiter, resourcedetection, resource, batch]
+            exporters: [otlp]

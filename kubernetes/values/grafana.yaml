@@ -58,6 +58,8 @@ datasources:
         isDefault: true
         jsonData:
           httpMethod: POST
+          # Coleta a cada 30-60 s: sem isso o $__rate_interval deixa rate() vazio.
+          timeInterval: 60s
           exemplarTraceIdDestinations:
             - name: trace_id
               datasourceUid: tempo

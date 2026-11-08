@@ -80,6 +80,21 @@ repos:
         pass_filenames: false
         files: ^ansible/
 
+      - id: vendor-dashboards-check
+        name: dashboards do Grafana batem com o lock (sha256, uids, tamanho)
+        language: script
+        entry: scripts/vendor-dashboards.sh
+        args: [--check]
+        pass_filenames: false
+        files: ^(kubernetes/workloads/observability/base/dashboards/|scripts/vendor-dashboards\.sh)
+
+      - id: alert-rules-check
+        name: regras de alerta do Grafana (uid único, severity, datasource)
+        language: system
+        entry: python3 scripts/check-alert-rules.py
+        pass_filenames: false
+        files: ^(kubernetes/workloads/observability/base/alerts/|scripts/check-alert-rules\.py)
+
       - id: helm-lint
         name: helm lint --strict (chart app-of-apps)
         language: system

@@ -1,0 +1,213 @@
+# Regras do Grafana Alerting, carregadas pelo sidecar (label grafana_alert).
+# Derivadas de regras da comunidade (origem em cada comentário), reescritas para os
+# nomes OTel que chegam ao Prometheus por OTLP. Hosts se distinguem por host_name
+# (service.name vira o label job). Severidades: critical e warning chegam por e-mail;
+# info só aparece na UI (veja a política em overlays/tailscale/contact-points.yaml).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: hosts
+    folder: Homelab
+    interval: 1m
+    rules:
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostOutOfDiskSpace
+      - uid: host-disk-critical
+        title: Disco raiz acima de 95%
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.host_name }}: disco / com {{ humanizePercentage $values.A.Value }} em uso"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (host_name) (system_filesystem_usage_bytes{mountpoint="/", state="used"}) / sum by
+                (host_name) (system_filesystem_usage_bytes{mountpoint="/"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.95]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostDiskWillFillIn24Hours
+      - uid: host-disk-fill-24h
+        title: Disco raiz enche em 24h
+        condition: B
+        for: 1h
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }}: no ritmo das últimas 6h o disco / enche em 24h"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                predict_linear(sum by (host_name) (system_filesystem_usage_bytes{mountpoint="/",
+                state="free"})[6h:5m], 86400)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostOutOfInodes
+      - uid: host-inodes-low
+        title: Inodes abaixo de 10%
+        condition: B
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }} {{ $labels.mountpoint }}: só {{ humanizePercentage $values.A.Value }} de inodes livres"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (host_name, mountpoint) (system_filesystem_inodes_usage{state="free"}) / sum by (host_name,
+                mountpoint) (system_filesystem_inodes_usage)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [0.1]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostHighCpuLoad
+      - uid: host-cpu-high
+        title: CPU acima de 90%
+        condition: B
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }}: CPU em {{ humanizePercentage $values.A.Value }} há 30 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                1 - sum by (host_name) (rate(system_cpu_time_seconds_total{state="idle"}[5m])) / sum by (host_name)
+                (rate(system_cpu_time_seconds_total[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.9]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostSwapIsFillingUp
+      - uid: host-swap-high
+        title: Swap acima de 80%
+        condition: B
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }}: swap em {{ humanizePercentage $values.A.Value }}"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (host_name) (system_paging_usage_bytes{state="used"}) / sum by (host_name)
+                (system_paging_usage_bytes)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.8]}
+
+      # Origem: mesmo desenho do alerta nas-silent
+      - uid: host-silent
+        title: Notebook sem métricas
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "O notebook não envia métricas há 10 minutos (o coletor do host parou ou o gateway não responde)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                absent_over_time(system_cpu_load_average_1m{job="homelab-host"}[10m])
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostOomKillDetected (via logs)
+      - uid: host-oom-kill
+        title: OOM kill no host
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.service_name }}: o kernel matou processos por falta de memória nos últimos 10 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: >-
+                sum by (service_name) (count_over_time({service_name=~"homelab-host|nas-host"} |= "Out of memory:
+                Killed process" [10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}

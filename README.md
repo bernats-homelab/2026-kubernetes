@@ -145,12 +145,20 @@ Logs, métricas e traces do cluster, do notebook e do NAS chegam por OTLP ao `ot
   ```bash
   sops edit kubernetes/workloads/observability/overlays/tailscale/grafana-smtp.sops.yaml
   ```
-  Faça push. Depois, em *Alerting → Contact points → email*, use *Test* para confirmar. As regras ficam em `kubernetes/workloads/observability/base/alert-rules.yaml`.
+  Faça push. Depois, em *Alerting → Contact points → email*, use *Test* para confirmar. As regras ficam em `kubernetes/workloads/observability/base/alerts/`.
 - **Notebook (journald e métricas do host):** o role `otel_host_agent` instala o `otelcol-contrib` como serviço. Ligue-o no `local.yaml`, como var de host, com `otel_host_agent_enabled: true` e `otel_host_agent_endpoint: otel:4317`, e rode `make apply`.
 - **NAS (pela UI do OMV, uma vez):**
-  1. Instale o plugin `openmediavault-compose`. Em *Services → Compose → Files*, crie o stack `otel-collector` com o conteúdo de [`hosts/nas/otel-collector/compose.yaml`](hosts/nas/otel-collector/compose.yaml) e o `config.yaml` ao lado. Se o NAS não usar o MagicDNS da tailnet, troque `OTEL_GATEWAY` pelo FQDN `otel.<sua-tailnet>:4317`.
-  2. Em *System → Logs → Remote* (o nome varia com a versão do OMV), envie o syslog para `127.0.0.1`, porta `5140`, TCP.
-  3. O NAS aparece no Grafana com `job="nas-host"` (métricas) e `service_name="nas-host"` (logs).
+  1. Instale o omv-extras e o plugin `openmediavault-compose`. Em *Services → Compose → Settings*, aponte *Compose Files* e o *Docker storage* para pastas no SSD, **não** no pendrive do sistema.
+  2. Em *Services → Compose → Files*, crie o stack `otel-collector` colando o conteúdo de [`hosts/nas/otel-collector/compose.yaml`](hosts/nas/otel-collector/compose.yaml) (a configuração vai embutida) e clique em *Up*. Se o NAS não usar o MagicDNS da tailnet, defina `OTEL_GATEWAY=otel.<sua-tailnet>:4317` no `.env` do stack.
+  3. Em *Diagnostics → System Logs → Remote* (o nome varia com a versão do OMV), envie o syslog para `127.0.0.1`, porta `5140`, TCP.
+  4. O NAS aparece no Grafana com `job="nas-host"` (métricas) e `service_name="nas-host"` (logs). Depois disso, os gráficos do OMV (*System → Monitoring*) podem ser desligados: o collectd/rrd só gravaria no pendrive à toa.
+- **Dashboards e alertas da comunidade:** o Grafana já traz pastas prontas: *Hosts* (notebook e NAS), *Kubernetes* (pods e visão do cluster), *Apps* (ArgoCD, CloudNativePG e Immich), *Observabilidade* (coletores OTel, Loki, Tempo e Prometheus), *Rede* (CoreDNS) e *Logs*. Eles ficam versionados em `kubernetes/workloads/observability/base/dashboards/`, com versão e sha256 em `dashboards.lock`; os da comunidade são ajustados por patches jq às nossas métricas OTel. As regras de alerta (`base/alerts/`) derivam de regras da comunidade, com `severity` `critical`, `warning` ou `info`.
+  ```bash
+  scripts/vendor-dashboards.sh --check        # offline: o que está versionado bate com o lock
+  scripts/vendor-dashboards.sh --update       # sobe a versão de um dashboard (edite o lock antes)
+  scripts/check-dashboard-metrics.py kubernetes/workloads/observability/base/dashboards --prometheus http://localhost:9090
+  ```
+  O último comando (rode com `kubectl port-forward` no Prometheus) lista as métricas usadas nos dashboards que o Prometheus não tem. Rode-o também a cada upgrade do coletor: os nomes OTel mudam entre versões.
 - **Retenção:** métricas por 30 dias (ou 6 GB), logs por 14 dias e traces por 7 dias, tudo no disco do notebook.
 - **Instrumentar um app:** envie OTLP para `otel-agent.observability.svc:4317` (gRPC) ou `:4318` (HTTP).
 

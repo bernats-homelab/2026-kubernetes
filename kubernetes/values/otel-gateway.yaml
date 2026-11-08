@@ -63,9 +63,17 @@ config:
         insecure: true
   service:
     telemetry:
+      resource:
+        service.name: otel-gateway
+      # Telemetria do próprio coletor por OTLP (receiver local).
       metrics:
-        level: none
-        readers: null
+        level: normal
+        readers:
+          - periodic:
+              exporter:
+                otlp:
+                  protocol: http/protobuf
+                  endpoint: http://localhost:4318
     pipelines:
       logs:
         receivers: [otlp]

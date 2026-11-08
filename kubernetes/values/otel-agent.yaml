@@ -56,13 +56,58 @@ config:
       config:
         scrape_configs:
           # Substitui o scrape do próprio coletor (default do chart).
-          - job_name: argocd
+          # Nomes dos jobs iguais aos do dashboard oficial do ArgoCD.
+          - job_name: argocd-application-controller-metrics
             scrape_interval: 60s
             static_configs:
-              - targets:
-                  - argocd-application-controller-metrics.argocd.svc:8082
-                  - argocd-server-metrics.argocd.svc:8083
-                  - argocd-repo-server-metrics.argocd.svc:8084
+              - targets: [argocd-application-controller-metrics.argocd.svc:8082]
+          - job_name: argocd-server-metrics
+            scrape_interval: 60s
+            static_configs:
+              - targets: [argocd-server-metrics.argocd.svc:8083]
+          - job_name: argocd-repo-server-metrics
+            scrape_interval: 60s
+            static_configs:
+              - targets: [argocd-repo-server-metrics.argocd.svc:8084]
+          # Backends e DNS: só as séries que os dashboards e alertas usam (allowlist).
+          - job_name: loki
+            scrape_interval: 60s
+            static_configs:
+              - targets: [loki.observability.svc:3100]
+                labels: {cluster: homelab}
+            metric_relabel_configs:
+              - source_labels: [__name__]
+                # yamllint disable-line rule:line-length
+                regex: (loki_(request_duration_seconds_.*|panic_total|discarded_samples_total|build_info|boltdb_shipper_.*|compactor_.*|ingester_.*|distributor_.*)|process_.*|go_goroutines|go_memstats_.*)
+                action: keep
+          - job_name: tempo
+            scrape_interval: 60s
+            static_configs:
+              - targets: [tempo.observability.svc:3200]
+                labels: {cluster: homelab}
+            metric_relabel_configs:
+              - source_labels: [__name__]
+                # yamllint disable-line rule:line-length
+                regex: (tempo_(distributor_.*|metrics_generator_.*|request_duration_seconds_.*|build_info|ingester_.*)|tempodb_(compaction|blocklist|retention)_.*|prometheus_remote_storage_.*|process_.*|go_goroutines|go_memstats_.*)
+                action: keep
+          - job_name: prometheus
+            scrape_interval: 60s
+            static_configs:
+              - targets: [prometheus-server.observability.svc:80]
+                labels: {cluster: homelab}
+            metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: (prometheus_.*|net_conntrack_.*|http_request_duration_.*|process_.*|go_goroutines|go_memstats_.*)
+                action: keep
+          - job_name: coredns
+            scrape_interval: 60s
+            static_configs:
+              - targets: [kube-dns.kube-system.svc:9153]
+                labels: {cluster: homelab}
+            metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: (coredns_(dns_.*|forward_.*|cache_.*|panics_total|health_.*|build_info)|process_.*|go_goroutines)
+                action: keep
           # Postgres do CloudNativePG (cnpg_backends_total, max_connections...).
           - job_name: cnpg
             scrape_interval: 60s
@@ -130,9 +175,18 @@ config:
         queue_size: 1000
   service:
     telemetry:
+      resource:
+        service.name: otel-agent
+      # Telemetria do próprio coletor por OTLP (receiver local): alimenta o
+      # dashboard e os alertas de exportação do coletor.
       metrics:
-        level: none
-        readers: null
+        level: normal
+        readers:
+          - periodic:
+              exporter:
+                otlp:
+                  protocol: http/protobuf
+                  endpoint: http://localhost:4318
     # Os presets acrescentam filelog, kubeletstats e k8sattributes aos pipelines.
     pipelines:
       logs:

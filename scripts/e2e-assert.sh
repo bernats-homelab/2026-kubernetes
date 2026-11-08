@@ -122,4 +122,17 @@ tempo_has_trace() {
 }
 retry "trace do e2e-telemetrygen no Tempo" tempo_has_trace
 
+echo "==> Observabilidade: o sidecar do Grafana carregou todos os dashboards e regras de alerta"
+# Os arquivos esperados vêm do próprio repo (dashboards da comunidade + próprios, e as
+# regras em alerts/). O sidecar escreve cada ConfigMap no volume do Grafana.
+expected_dashboards="$(find kubernetes/workloads/observability/base/dashboards -mindepth 2 -name '*.json' -not -path '*/patches/*' | wc -l)"
+expected_alert_files="$(find kubernetes/workloads/observability/base/alerts -name '*.yaml' | wc -l)"
+sidecar_loaded_everything() {
+  local dashboards alerts
+  dashboards="$(kubectl -n observability exec deploy/grafana -c grafana-sc-dashboard -- find /tmp/dashboards -name '*.json' | wc -l)"
+  alerts="$(kubectl -n observability exec deploy/grafana -c grafana-sc-alerts -- ls /etc/grafana/provisioning/alerting | grep -c 'yaml')"
+  [[ "${dashboards}" -ge "${expected_dashboards}" && "${alerts}" -ge "${expected_alert_files}" ]]
+}
+retry "${expected_dashboards} dashboards e ${expected_alert_files} arquivos de alerta no sidecar" sidecar_loaded_everything
+
 echo "OK: e2e passou."

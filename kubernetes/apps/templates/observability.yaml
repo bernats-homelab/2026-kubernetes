@@ -25,3 +25,5 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # Dashboards grandes: o last-applied do client-side apply estoura 256 KB.
+      - ServerSideApply=true

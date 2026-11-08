@@ -1,0 +1,238 @@
+# Regras do Grafana Alerting, carregadas pelo sidecar (label grafana_alert).
+# Derivadas de regras da comunidade (origem em cada comentário), reescritas para os
+# nomes OTel que chegam ao Prometheus por OTLP. Hosts se distinguem por host_name
+# (service.name vira o label job). Severidades: critical e warning chegam por e-mail;
+# info só aparece na UI (veja a política em overlays/tailscale/contact-points.yaml).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: kubernetes
+    folder: Homelab
+    interval: 1m
+    rules:
+      # Origem: kubernetes-mixin, KubeNodeNotReady
+      - uid: k8s-node-notready
+        title: Nó do Kubernetes NotReady
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "O nó {{ $labels.k8s_node_name }} está NotReady"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                k8s_node_condition_ready
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+
+      # Origem: kubernetes-mixin, KubePodNotReady (fase numérica do k8s_cluster: 1=Pending, 5=Unknown)
+      - uid: k8s-pod-stuck
+        title: Pod Pending ou Unknown
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_pod_name }} está Pending/Unknown há 15 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (k8s_namespace_name, k8s_pod_name) (k8s_pod_phase) == 1 or max by (k8s_namespace_name,
+                k8s_pod_name) (k8s_pod_phase) == 5
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: kubernetes-mixin, KubeContainerWaiting
+      - uid: k8s-container-notready
+        title: Container não pronto
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_pod_name }} ({{ $labels.k8s_container_name }}) não está pronto"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                (1 - min by (k8s_namespace_name, k8s_pod_name, k8s_container_name) (k8s_container_ready)) and on
+                (k8s_namespace_name, k8s_pod_name) (max by (k8s_namespace_name, k8s_pod_name) (k8s_pod_phase) == 2)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: kubernetes-mixin, KubeDeploymentReplicasMismatch
+      - uid: k8s-deployment-mismatch
+        title: Deployment com réplicas faltando
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_deployment_name }}: {{ $values.A.Value }} réplica(s) indisponível(is)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                k8s_deployment_desired - k8s_deployment_available
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: kubernetes-mixin, KubeStatefulSetReplicasMismatch
+      - uid: k8s-statefulset-mismatch
+        title: StatefulSet com réplicas faltando
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_statefulset_name }}: {{ $values.A.Value }} réplica(s) não pronta(s)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                k8s_statefulset_desired_pods - k8s_statefulset_ready_pods
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: kubernetes-mixin, KubeDaemonSetRolloutStuck
+      - uid: k8s-daemonset-mismatch
+        title: DaemonSet incompleto
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_daemonset_name }}: {{ $values.A.Value }} nó(s) sem pod pronto"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                k8s_daemonset_desired_scheduled_nodes - k8s_daemonset_ready_nodes
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: kubernetes-mixin, KubeJobFailed
+      - uid: k8s-job-failed
+        title: Job com pods falhados
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: info}
+        annotations:
+          summary: "{{ $labels.k8s_namespace_name }}/{{ $labels.k8s_job_name }}: {{ $values.A.Value }} pod(s) falharam"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                k8s_job_failed_pods
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), ContainerHighMemoryUsage
+      - uid: k8s-memory-near-limit
+        title: Container perto do limite de memória
+        condition: B
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.k8s_pod_name }} ({{ $labels.k8s_container_name }}) usa {{ humanizePercentage $values.A.Value }} do limite"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (k8s_namespace_name, k8s_pod_name, k8s_container_name) (container_memory_working_set_bytes /
+                on (k8s_namespace_name, k8s_pod_name, k8s_container_name) k8s_container_memory_limit_bytes)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.9]}

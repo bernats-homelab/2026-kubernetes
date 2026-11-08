@@ -42,3 +42,15 @@ Queremos logs, métricas e traces do cluster, do próprio notebook, do NAS e, ma
 - **Nomes de métricas seguem a tradução OTLP→Prometheus** (`system.filesystem.usage` → `system_filesystem_usage_bytes`). `service.name` vira o label `job` no Prometheus e `service_name` no Loki. Os hosts usam `homelab-host` e o NAS usa `nas-host`, para não versionar hostnames.
 - **No CI**, o Grafana sobe sem segredos (sem SMTP nem Ingress), e o e2e confere o fluxo completo: métricas, logs e um trace sintético (`telemetrygen`).
 - **Os charts da Grafana migraram para `grafana-community`.** Os de `grafana/` estão deprecados.
+
+## Dashboards e alertas da comunidade
+
+Os dashboards e as regras de alerta vêm de projetos da comunidade, **sem** instalar kube-state-metrics, node-exporter nem cAdvisor: o stack continua só com as métricas OTel nativas (`kubeletstats`, `k8s_cluster`, `hostmetrics`).
+
+- **Dashboards vendorizados e fixados.** `scripts/vendor-dashboards.sh` baixa cada dashboard de uma versão fixa (grafana.com por ID e revisão; ArgoCD, Loki e Tempo por tag), confere o sha256 do upstream no `dashboards.lock` e aplica um filtro comum (datasources por uid) mais um patch jq por dashboard (`patches/<nome>.jq`). Um `kustomization.yaml` gerado cria um ConfigMap por dashboard, com a pasta do Grafana na annotation `grafana_folder`. O `gnetId` do chart ficou de fora: ele baixa na subida do pod, sem hash e sem patch.
+- **Patches típicos.** O `job` vem como `service.namespace/service.name`; contadores chegam com o sufixo `_total`; as recording rules dos mixins não existem; e os painéis que dependem de `kube_*`, de `kubelet_volume_stats_*` (o `local-path` não os reporta) ou do controller-runtime do operador do CNPG são removidos.
+- **Dois dashboards próprios** (cluster e Immich), porque nenhum da comunidade usa as métricas `k8s_cluster` nem as do Immich atual.
+- **Alertas convertidos para o Grafana**, não para o Prometheus: um caminho só até o e-mail, sem Alertmanager. Cada regra cita a origem (kubernetes-mixin, awesome-prometheus-alerts, regras do CloudNativePG) e foi reescrita para nossos nomes. O conjunto é curado para um nó único: ficaram de fora HA, réplicas, lag, disco de PVC e backups.
+- **Scrapes novos, todos por OTLP.** O `otel-agent` passou a raspar Loki, Tempo, Prometheus e CoreDNS (com allowlist de séries e `cluster=homelab`) e a mandar a própria telemetria dos coletores. Isso deixa de fora, por ora, o Grafana e o Tailscale: os proxies precisam de um `ProxyClass` com métricas, e fica para uma próxima etapa.
+- **Rotas por `severity`:** `critical` e `warning` chegam por e-mail; `info` só aparece na UI.
+- **Verificação.** `make test` confere o lock (`--check`) e as regras (`scripts/check-alert-rules.py`); o e2e confere que o sidecar do Grafana carregou todos os arquivos. `scripts/check-dashboard-metrics.py` roda à mão contra o Prometheus do notebook e lista as métricas que faltam.

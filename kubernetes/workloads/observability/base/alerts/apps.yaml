@@ -1,0 +1,123 @@
+# Regras do Grafana Alerting, carregadas pelo sidecar (label grafana_alert).
+# Derivadas de regras da comunidade (origem em cada comentário), reescritas para os
+# nomes OTel que chegam ao Prometheus por OTLP. Hosts se distinguem por host_name
+# (service.name vira o label job). Severidades: critical e warning chegam por e-mail;
+# info só aparece na UI (veja a política em overlays/tailscale/contact-points.yaml).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: apps
+    folder: Homelab
+    interval: 1m
+    rules:
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), ArgocdServiceNotSynced
+      - uid: argocd-app-outofsync
+        title: Application do ArgoCD fora de sync
+        condition: B
+        for: 30m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "Application {{ $labels.name }} está {{ $labels.sync_status }} há 30 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                count by (name, sync_status) (argocd_app_info{sync_status!="Synced"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # Origem: cloudnative-pg/charts, regra cluster-offline (cluster-v0.9.0)
+      - uid: cnpg-instance-down
+        title: Instância do Postgres (CNPG) fora do ar
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.pod }}: o Postgres não responde ao exporter do CNPG"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                min by (namespace, pod) (cnpg_collector_up)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: lt, params: [1]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), PostgresqlTooManyLocksAcquired / XID wraparound
+      - uid: postgres-xid-age
+        title: Idade do XID do Postgres alta
+        condition: B
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.datname }}: XID age em {{ $values.A.Value }} (wraparound perto)"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (namespace, datname) (cnpg_pg_database_xid_age)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [1500000000]}
+
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), PostgresqlDeadLocks
+      - uid: postgres-deadlocks
+        title: Deadlocks no Postgres
+        condition: B
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.namespace }}/{{ $labels.datname }}: {{ $values.A.Value }} deadlocks em 10 min"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                sum by (namespace, datname) (increase(cnpg_pg_stat_database_deadlocks_total[10m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [5]}

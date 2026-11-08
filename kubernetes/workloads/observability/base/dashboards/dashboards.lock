@@ -1,0 +1,14 @@
+# nome pasta url sha256-upstream sha256-saida   (gerado por scripts/vendor-dashboards.sh --update)
+# Fontes: grafana.com (IDs/revisões abaixo), argoproj/argo-cd v3.5.6 (Apache-2.0),
+# grafana/loki v3.7.9 e grafana/tempo v3.1.1 (mixins compilados, AGPL-3.0).
+host Hosts https://grafana.com/api/dashboards/24638/revisions/1/download 8a486d89e50d9d07e2a6eca8aa6bb3889e606dc288836b252ed2d7c784ef7135 f008d9e50b4842200fe562983cc799e76dceca26bf24db534bd1acac4a5f20ac
+pods Kubernetes https://grafana.com/api/dashboards/20944/revisions/1/download 8fdce9ee5d9282be66b154060634fba0561eefa21e38b1580b55b7c1a31d6bb5 8ee6ef143104d84df9e166ea5787e624242f35da86389f84475495afe93d61c3
+argocd Apps https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.6/examples/dashboard.json d25cc5a9f7d1c7409ed55b5d615a5b39775bc6e07389a00b69a9cb78c1e8bbd6 29fcd872dad680fd84eb7c6e349be23618203061bf1d213d2cb5cb52ebb92a74
+cnpg Apps https://grafana.com/api/dashboards/20417/revisions/4/download f9820909e9eea45d537ef22f2703953082d267ac1d0f530f212d44d729600faa 231fbb63ed207a4c8836cb23abf4d29129c660d08990ceaa518da79aa77217cf
+otel-collector Observabilidade https://grafana.com/api/dashboards/15983/revisions/31/download dea134bc482f058dd3b48267eb6a2eb700ba7e51b7e5837024c576cf7c3ffd97 8ec3dfa5296828cae9760240cf5e6c8a7eee11e1c7c4d3bf066f75df604a8983
+loki-reads Observabilidade https://raw.githubusercontent.com/grafana/loki/v3.7.9/production/loki-mixin-compiled/dashboards/loki-reads.json 002e85d351291716aa1e877ab7b55bf290e3d19b3f2dfd2e6cd5297bbc05b454 a19d4c1bab81e44d7bde607080eeeb23238679b749182b3a69cfd757f99b54f3
+loki-writes Observabilidade https://raw.githubusercontent.com/grafana/loki/v3.7.9/production/loki-mixin-compiled/dashboards/loki-writes.json 05ab25e394aa3a1c3da259e0d7cc039c3dc412919f1dd5bbd88ed7371d336b2f 00dc6a638bc078e3e2325c7ffdf7e959de2d796c1859a007d7e08cdd6a2eb5a9
+tempo-operational Observabilidade https://raw.githubusercontent.com/grafana/tempo/v3.1.1/operations/tempo-mixin-compiled/dashboards/tempo-operational.json b0d5c737bc5caa672841454dc4a8b6bcd9c9d74dfc8307037b9de845dc1dd60b ae96251f0f98be48d83b53d60ed66336830466fe87b43d14f8670e833e8d18e9
+prometheus Observabilidade https://grafana.com/api/dashboards/3662/revisions/2/download fa7b22f3f75836f195195f9fb5f3b58120106cee46a59c16e3cd13e661cc3384 e30cec8dede20edc54faac96f9e6e818d4065b6c6c636372bfb6cbb2487be22f
+coredns Rede https://grafana.com/api/dashboards/14981/revisions/2/download 5dc3f10b19881103a760acabd3c238733602058e168d88272990d85205e70877 3edea9048c115f4b01b5021c8926f86a18ba4a50b84ba6a8af332dc6d9736468
+logs Logs https://grafana.com/api/dashboards/24866/revisions/1/download d5cde12910df036e1384a35b3f34ece45ab6b980fb37d65e481abc1b8fb1b8e8 d8f1790aa6d7ce9e7dbde67886c00913a9629262b2afa3038130d102e9d4c173
