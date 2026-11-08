@@ -10,12 +10,13 @@ groups:
     folder: Homelab
     interval: 1m
     rules:
-      # Origem: Watchdog / PrometheusNotIngestingSamples
+      # Origem: Watchdog / PrometheusNotIngestingSamples. absent_over_time devolve 1 só quando a
+      # métrica some e vazio quando ela existe: "sem dados" é o estado saudável (noDataState OK).
       - uid: pipeline-dead
         title: Nenhuma métrica do cluster chegando
         condition: B
         for: 5m
-        noDataState: Alerting
+        noDataState: OK
         execErrState: Error
         labels: {severity: critical}
         annotations:

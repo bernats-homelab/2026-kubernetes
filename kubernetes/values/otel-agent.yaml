@@ -186,7 +186,7 @@ config:
               exporter:
                 otlp:
                   protocol: http/protobuf
-                  endpoint: http://localhost:4318
+                  endpoint: http://${env:MY_POD_IP}:4318
     # Os presets acrescentam filelog, kubeletstats e k8sattributes aos pipelines.
     pipelines:
       logs:

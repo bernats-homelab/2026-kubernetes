@@ -65,7 +65,7 @@ config:
     telemetry:
       resource:
         service.name: otel-gateway
-      # Telemetria do próprio coletor por OTLP (receiver local).
+      # Telemetria do próprio coletor por OTLP (receiver no IP do pod, não em localhost).
       metrics:
         level: normal
         readers:
@@ -73,7 +73,7 @@ config:
               exporter:
                 otlp:
                   protocol: http/protobuf
-                  endpoint: http://localhost:4318
+                  endpoint: http://${env:MY_POD_IP}:4318
     pipelines:
       logs:
         receivers: [otlp]
