@@ -34,6 +34,11 @@ spec:
           admin:
             existingSecret: grafana-admin
           envFromSecret: grafana-smtp
+          # GF_SERVER_ROOT_URL (links dos alertas) com a URL da Ingress; criado pelo
+          # role cluster_bootstrap com o nome da tailnet descoberto em runtime.
+          envFromSecrets:
+            - name: grafana-public-url
+              optional: true
         {{- end }}
     - repoURL: {{ .Values.repoURL }}
       targetRevision: {{ .Values.targetRevision }}

@@ -15,6 +15,33 @@
         state: present
       loop: [argocd, tailscale]
 
+    # O ArgoCD cria o namespace no sync (CreateNamespace=true); criamos antes só para
+    # poder pôr o Secret de URL pública do Grafana nele.
+    - name: Criar namespace observability
+      kubernetes.core.k8s:
+        api_version: v1
+        kind: Namespace
+        name: observability
+        state: present
+      when: tailscale_enabled | bool
+
+    # URL pública do Grafana (Ingress "grafana" na tailnet) para os links dos alertas.
+    # O nome da tailnet (*.ts.net) não vai para o repo: sai do DNSName do host.
+    - name: Criar Secret com a URL pública do Grafana
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: grafana-public-url
+            namespace: observability
+          type: Opaque
+          data:
+            GF_SERVER_ROOT_URL: "{{ ('https://grafana.' ~ (tailscale_check_dns_name | regex_replace('^[^.]+\\.', '')) ~ '/') | b64encode }}"
+      no_log: true
+      when: tailscale_enabled | bool
+
     # Criado antes do ArgoCD para o operator subir já com credenciais.
     - name: Criar Secret OAuth do Tailscale Operator
       kubernetes.core.k8s:
