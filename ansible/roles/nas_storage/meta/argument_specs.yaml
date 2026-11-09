@@ -23,6 +23,10 @@ argument_specs:
             description: Export com escrita do vault do Obsidian
             type: str
             required: true
+          home_assistant:
+            description: Export com escrita do /config do Home Assistant
+            type: str
+            required: true
       nas_storage_kubeconfig:
         type: str
         default: /etc/rancher/k3s/k3s.yaml
@@ -38,6 +42,8 @@ argument_specs:
           - {name: immich-photos, export: photos, namespace: immich, access_mode: ReadOnlyMany, read_only: true, write_test: false, capacity: 1Ti}
           - {name: immich-data, export: data, namespace: immich, access_mode: ReadWriteOnce, read_only: false, write_test: true, capacity: 200Gi}
           - {name: obsidian-vault, export: obsidian, namespace: obsidian, access_mode: ReadWriteOnce, read_only: false, write_test: true, capacity: 10Gi}
+          - {name: home-assistant-config, export: home_assistant, namespace: home-assistant, access_mode: ReadWriteOnce,
+             read_only: false, write_test: true, capacity: 5Gi}
         options:
           name:
             type: str
@@ -46,7 +52,7 @@ argument_specs:
             description: Chave em nas_storage_exports
             type: str
             required: true
-            choices: [photos, data, obsidian]
+            choices: [photos, data, obsidian, home_assistant]
           namespace:
             type: str
             required: true

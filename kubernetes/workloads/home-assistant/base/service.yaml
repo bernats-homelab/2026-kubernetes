@@ -1,0 +1,12 @@
+# Também é a rota interna do grocery-ops: http://home-assistant.home-assistant.svc:8123
+# (com hostNetwork o endpoint vira <IP do nó>:8123 e o Service segue funcionando).
+apiVersion: v1
+kind: Service
+metadata:
+  name: home-assistant
+spec:
+  selector: {}
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http

@@ -28,3 +28,10 @@ nas_storage_volumes:
     read_only: false
     write_test: true
     capacity: 10Gi
+  - name: home-assistant-config
+    export: home_assistant
+    namespace: home-assistant
+    access_mode: ReadWriteOnce
+    read_only: false
+    write_test: true
+    capacity: 5Gi

@@ -1,0 +1,16 @@
+# base = CI (rede normal de pod, sem Bluetooth, sem Ingress).
+# overlays/tailscale = notebook (hostNetwork, D-Bus do host, https://casa.<sua-tailnet>).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: home-assistant
+labels:
+  - pairs:
+      app.kubernetes.io/name: home-assistant
+    includeSelectors: true
+resources:
+  - deployment.yaml
+  - service.yaml
+configMapGenerator:
+  - name: home-assistant-config
+    files:
+      - configuration.yaml

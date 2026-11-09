@@ -52,7 +52,7 @@
           { "$ref": "#/definitions/dnsLabel" },
           {
             "not": {
-              "enum": ["root", "argocd", "tailscale-operator", "hello-world", "cloudnative-pg", "immich-database", "immich", "obsidian", "k8s-app-smoke", "prometheus", "loki", "tempo", "grafana", "otel-agent", "otel-gateway", "observability"]
+              "enum": ["root", "argocd", "tailscale-operator", "hello-world", "cloudnative-pg", "immich-database", "immich", "obsidian", "home-assistant-database", "home-assistant", "k8s-app-smoke", "prometheus", "loki", "tempo", "grafana", "otel-agent", "otel-gateway", "observability"]
             }
           }
         ]

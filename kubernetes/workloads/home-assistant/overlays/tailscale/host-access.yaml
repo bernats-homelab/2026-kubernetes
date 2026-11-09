@@ -1,0 +1,32 @@
+# Só no notebook. Não altera a rede do host: o pod apenas escuta nela.
+# - hostNetwork: a descoberta (zeroconf/SSDP) usa multicast na LAN; o HA passa a
+#   escutar em <IP do notebook>:8123 também na LAN.
+# - /run/dbus (somente leitura): o HA fala com o BlueZ do host (adaptador hci0).
+# - NET_ADMIN/NET_RAW: varredura Bluetooth (HCI) e descoberta por ping/DHCP.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: home-assistant
+  annotations:
+    ignore-check.kube-linter.io/host-network: "descoberta mDNS/SSDP exige a rede do host"
+    ignore-check.kube-linter.io/drop-net-raw-capability: "Bluetooth (HCI) e descoberta precisam de NET_RAW"
+spec:
+  template:
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: home-assistant
+          securityContext:
+            capabilities:
+              drop: []
+              add: [NET_ADMIN, NET_RAW]
+          volumeMounts:
+            - name: dbus
+              mountPath: /run/dbus
+              readOnly: true
+      volumes:
+        - name: dbus
+          hostPath:
+            path: /run/dbus
+            type: Directory

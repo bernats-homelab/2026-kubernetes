@@ -1,0 +1,103 @@
+# Home Assistant Container. O configuration.yaml vem do Git (ConfigMap, subPath); o
+# resto do /config (.storage: integrações, usuários e tokens criados na UI) fica na
+# PVC home-assistant-config (NFS do NAS; local-path no CI). O histórico vai para o
+# Postgres (CNPG) pelo recorder.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: home-assistant
+  annotations:
+    ignore-check.kube-linter.io/run-as-non-root: "a imagem oficial do HA roda como root (s6-overlay)"
+    ignore-check.kube-linter.io/no-read-only-root-fs: "o HA instala dependências de integrações em tempo de execução"
+spec:
+  replicas: 1
+  # /config é RWO e o HA não suporta duas instâncias no mesmo banco.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {}
+  template:
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        # O configuration.yaml inclui estes arquivos, que a UI edita: cria vazios só
+        # na primeira vez (nunca sobrescreve o que a UI salvou).
+        - name: init-includes
+          image: ghcr.io/home-assistant/home-assistant:2026.11.0@sha256:c6c1ca9931036bf3a2c4cc088d8db25dfea3b33935a5ecc83c40349462e2f69e
+          command:
+            - sh
+            - -c
+            - |
+              [ -e /config/automations.yaml ] || echo '[]' > /config/automations.yaml
+              [ -e /config/scenes.yaml ] || echo '[]' > /config/scenes.yaml
+              [ -e /config/scripts.yaml ] || echo '{}' > /config/scripts.yaml
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [NET_RAW]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+      containers:
+        - name: home-assistant
+          image: ghcr.io/home-assistant/home-assistant:2026.11.0@sha256:c6c1ca9931036bf3a2c4cc088d8db25dfea3b33935a5ecc83c40349462e2f69e
+          env:
+            - name: TZ
+              value: America/Sao_Paulo
+            # Lido no configuration.yaml com !env_var DB_URL (recorder).
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: home-assistant-database-app
+                  key: uri
+          ports:
+            - name: http
+              containerPort: 8123
+          # /manifest.json responde 200 sem login. O primeiro boot instala as
+          # dependências das integrações padrão (pip), em NFS pode passar de 5 min.
+          startupProbe:
+            httpGet:
+              path: /manifest.json
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /manifest.json
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /manifest.json
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [NET_RAW]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: configuration
+              mountPath: /config/configuration.yaml
+              subPath: configuration.yaml
+              readOnly: true
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: home-assistant-config
+        - name: configuration
+          configMap:
+            name: home-assistant-config

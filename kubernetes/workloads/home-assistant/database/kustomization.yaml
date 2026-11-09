@@ -1,0 +1,10 @@
+# Recorder (histórico) do Home Assistant: CloudNativePG no disco do notebook (local-path).
+# O /config do HA fica em ../storage, junto da Application que o monta.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: home-assistant
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: home-assistant
+resources:
+  - database-cluster.yaml

@@ -7,6 +7,8 @@ templates:
   - templates/immich-database.yaml
   - templates/immich.yaml
   - templates/obsidian.yaml
+  - templates/home-assistant-database.yaml
+  - templates/home-assistant.yaml
   - templates/prometheus.yaml
   - templates/loki.yaml
   - templates/tempo.yaml
@@ -59,6 +61,14 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "2"
         template: templates/obsidian.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "2"
+        template: templates/home-assistant-database.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+        template: templates/home-assistant.yaml
       - equal:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "2"
@@ -246,6 +256,29 @@ tests:
       - equal:
           path: spec.sources[1].path
           value: kubernetes/workloads/obsidian/storage/base
+
+  - it: Home Assistant com Tailscale usa o overlay (Ingress casa, hostNetwork) e o /config do NAS
+    template: templates/home-assistant.yaml
+    asserts:
+      - equal:
+          path: spec.sources[0].path
+          value: kubernetes/workloads/home-assistant/overlays/tailscale
+      - equal:
+          path: spec.sources[1].path
+          value: kubernetes/workloads/home-assistant/storage/overlays/nas
+
+  - it: sem Tailscale e sem NAS (CI) o Home Assistant usa base nos dois
+    template: templates/home-assistant.yaml
+    set:
+      tailscaleOperator.enabled: false
+      nasStorage.enabled: false
+    asserts:
+      - equal:
+          path: spec.sources[0].path
+          value: kubernetes/workloads/home-assistant/base
+      - equal:
+          path: spec.sources[1].path
+          value: kubernetes/workloads/home-assistant/storage/base
 
   - it: versões dos charts de observabilidade vêm do values (fonte única; um chart, duas releases do coletor)
     set:

@@ -13,6 +13,7 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
                                                ├─ cloudnative-pg        → Postgres do Immich
                                                ├─ immich                → https://fotos.<sua-tailnet>
                                                │    └─ NFS (tailnet) ──▶ NAS openmediavault (fotos ro, immich-data rw)
+                                               ├─ home-assistant        → https://casa.<sua-tailnet> (/config no NAS, recorder no CNPG)
                                                └─ apps: (outros repos da org/Bemesko, AppProject homelab-apps)
                                                     └─ bernats-homelab/<app> @ vX.Y.Z → deploy/ → https://<app>.<sua-tailnet>
 ```
@@ -97,7 +98,7 @@ O playbook **nunca** altera o NAS; ele só confere o que você configurou aqui.
 
 ### 2. Inventário (`ansible/inventory/local.yaml`)
 
-Preencha as variáveis de `inventory.example.yaml`: `nas_storage_enabled: true`, `nas_storage_host` e `nas_storage_exports.{photos,data,obsidian}`, que são os paths `/export/...` (o `obsidian` é o export do vault, veja a seção do Obsidian). Faça isso **antes** do primeiro `make apply` com o Immich. As PVCs são imutáveis, e com `nas_storage_enabled: false` elas seriam criadas em `local-path`.
+Preencha as variáveis de `inventory.example.yaml`: `nas_storage_enabled: true`, `nas_storage_host` e `nas_storage_exports.{photos,data,obsidian,home_assistant}`, que são os paths `/export/...` (o `obsidian` e o `home_assistant` estão descritos nas seções de cada app). Faça isso **antes** do primeiro `make apply` com o Immich. As PVCs são imutáveis, e com `nas_storage_enabled: false` elas seriam criadas em `local-path`.
 
 Depois rode `make plan` e `make apply`. O role `nas_storage` confere os exports com `showmount` e faz uma montagem de teste de cada um, incluindo uma escrita em `immich-data`. Se algo estiver errado no OMV, ele falha antes de criar os PVs.
 
@@ -132,6 +133,15 @@ O Obsidian desktop roda no cluster ([linuxserver/obsidian](https://docs.linuxser
 3. **Primeiro acesso:** no Obsidian, use *Open folder as vault* em `/vaults/borbsidian`. A escolha fica salva em `/config`.
 
 **Edição em vários lugares.** Por NFS, o Obsidian do cluster não é avisado de mudanças feitas por outros dispositivos (Syncthing, SMB), porque o inotify não atravessa NFS. Edite num lugar por vez. Ao voltar para o Obsidian do navegador, use *Reload app without saving* (paleta de comandos) antes de editar, para não sobrescrever a versão mais nova.
+
+## Home Assistant (ponte da lista de compras da Alexa)
+
+O Home Assistant roda no cluster e abre em `https://casa.<sua-tailnet>`. O `configuration.yaml` vem do Git ([kubernetes/workloads/home-assistant/base/configuration.yaml](kubernetes/workloads/home-assistant/base/configuration.yaml)); o resto do `/config` fica no NAS e o histórico no Postgres (CNPG). No notebook ele usa `hostNetwork` (descoberta na LAN; também responde em `<IP do notebook>:8123`) e o Bluetooth do host via D-Bus. Veja o [ADR 009](docs/adr/009-home-assistant.md).
+
+1. **NAS (UI do OMV):** crie a shared folder `home-assistant` e um share NFS **Read/Write** para `<IP Tailscale do notebook>/32` com as mesmas opções do `immich-data`. Coloque o path em `nas_storage_exports.home_assistant` e rode `make plan` e `make apply`.
+2. **Primeiro acesso:** abra `https://casa.<sua-tailnet>` e crie o usuário dono.
+3. **Alexa:** ative na conta Amazon o 2FA por app autenticador (SMS não serve) e adicione a integração **Alexa Devices** em *Settings → Devices & services*. A lista de compras vira uma entidade `todo`.
+4. **grocery-ops:** crie um usuário `grocery-ops` no HA, gere um *long-lived access token* no perfil dele e guarde-o como `*.sops.yaml` no `deploy/` do repo do grocery-ops. O app chama `http://home-assistant.home-assistant.svc:8123` (contrato no ADR 009).
 
 ## Observabilidade (OpenTelemetry + Grafana)
 

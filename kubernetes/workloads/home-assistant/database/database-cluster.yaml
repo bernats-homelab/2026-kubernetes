@@ -1,0 +1,24 @@
+# Banco "app" (dono "app") criado pelo bootstrap padrão do CNPG; o HA não precisa de
+# extensões. Usuário/senha/URI ficam no Secret home-assistant-database-app.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: home-assistant-database
+  annotations:
+    # CRD vem da Application cloudnative-pg (wave 0).
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  instances: 1
+  # Single-node: um PDB impediria drenar o próprio nó.
+  enablePDB: false
+  # Mesma imagem do Postgres do Immich.
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie@sha256:39add80f5b1e573e2f6b641c66fd1a2f8dede67ca0330e870285bc1078551390
+  storage:
+    storageClass: local-path
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi

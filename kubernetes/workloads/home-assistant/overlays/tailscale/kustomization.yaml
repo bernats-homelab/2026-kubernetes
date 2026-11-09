@@ -1,0 +1,10 @@
+# Notebook: https://casa.<sua-tailnet>, com hostNetwork (descoberta mDNS/SSDP na LAN)
+# e o D-Bus do host (Bluetooth via BlueZ do notebook). O CI usa base.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: home-assistant
+resources:
+  - ../../base
+  - ingress.yaml
+patches:
+  - path: host-access.yaml

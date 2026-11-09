@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: home-assistant
+  namespace: argocd
+  annotations:
+    # Depois do banco (home-assistant-database, wave 2): o recorder conecta na subida.
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    # Ingress "casa", hostNetwork e D-Bus do host só no notebook; o CI usa base.
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      path: kubernetes/workloads/home-assistant/{{ ternary "overlays/tailscale" "base" .Values.tailscaleOperator.enabled }}
+    # PVC do /config na mesma Application do Deployment que a monta.
+    - repoURL: {{ .Values.repoURL }}
+      targetRevision: {{ .Values.targetRevision }}
+      path: kubernetes/workloads/home-assistant/storage/{{ ternary "overlays/nas" "base" .Values.nasStorage.enabled }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-assistant
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,11 @@
+# /config do Home Assistant (.storage, integrações, tokens). Em base fica em local-path (CI).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: home-assistant-config
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi

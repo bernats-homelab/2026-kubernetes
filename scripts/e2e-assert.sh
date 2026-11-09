@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world cloudnative-pg immich-database immich obsidian k8s-app-smoke grocery-ops prometheus loki tempo observability otel-gateway otel-agent grafana; do
+for app in root argocd hello-world cloudnative-pg immich-database immich obsidian home-assistant-database home-assistant k8s-app-smoke grocery-ops prometheus loki tempo observability otel-gateway otel-agent grafana; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -52,6 +52,18 @@ page="$(kubectl get --raw /api/v1/namespaces/obsidian/services/obsidian:http/pro
 grep -qi '<html' <<<"${page}" || {
   echo "ERRO: resposta inesperada do Obsidian:" >&2
   head -c 500 <<<"${page}" >&2
+  exit 1
+}
+
+echo "==> Postgres do Home Assistant (CNPG) pronto"
+kubectl -n home-assistant wait cluster.postgresql.cnpg.io/home-assistant-database --for=condition=Ready --timeout=600s
+
+echo "==> Home Assistant serve /manifest.json"
+kubectl -n home-assistant rollout status deployment/home-assistant --timeout=900s
+manifest="$(kubectl get --raw /api/v1/namespaces/home-assistant/services/home-assistant:http/proxy/manifest.json)"
+grep -q "Home Assistant" <<<"${manifest}" || {
+  echo "ERRO: resposta inesperada do Home Assistant:" >&2
+  head -c 500 <<<"${manifest}" >&2
   exit 1
 }
 

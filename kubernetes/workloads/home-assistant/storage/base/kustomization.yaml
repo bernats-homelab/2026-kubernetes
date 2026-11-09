@@ -1,0 +1,11 @@
+# PVC do /config, sincronizada pela mesma Application que a monta (o local-path só
+# vincula a PVC quando um pod a usa: WaitForFirstConsumer).
+# base = CI (local-path); overlays/nas = PV NFS do NAS (role nas_storage).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: home-assistant
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: home-assistant
+resources:
+  - pvc.yaml

@@ -13,7 +13,8 @@ repos:
       - id: check-executables-have-shebangs
       - id: check-yaml
         args: [--allow-multiple-documents]
-        exclude: ^kubernetes/apps/templates/|\.j2$
+        # configuration.yaml do Home Assistant usa tags próprias (!include, !env_var); o yamllint ainda o valida.
+        exclude: ^kubernetes/apps/templates/|\.j2$|^kubernetes/workloads/home-assistant/base/configuration\.yaml$
       - id: check-json
       - id: detect-private-key
 
