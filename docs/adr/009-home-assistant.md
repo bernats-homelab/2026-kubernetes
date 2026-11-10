@@ -27,7 +27,7 @@ O grocery-ops ainda não implementa a integração. A infra deixa pronto:
 - **Autenticação:** um usuário `grocery-ops` no HA com um *long-lived access token*. O token fica num `*.sops.yaml` no `deploy/` do repo do grocery-ops, não aqui.
 - **Leitura:** `POST /api/services/todo/get_items?return_response` com `{"entity_id": "todo.<lista>", "status": "needs_action"}`, ou o comando de websocket equivalente.
 - **Escrita:** `todo.add_item`, `todo.update_item` (marcar como comprado) e `todo.remove_item`.
-- **Push HA → app (quando houver endpoint):** automação com os gatilhos `todo.item_added`, `todo.item_completed` e `todo.item_removed` chamando um `rest_command` para `http://grocery-ops.grocery-ops.svc/...`.
+- **Push HA → app (quando houver endpoint):** automação com os gatilhos `todo.item_added`, `todo.item_completed` e `todo.item_removed` chamando um `rest_command` para `http://grocery-ops.grocery-ops.svc.cluster.local/...` (FQDN: o pod do HA usa `ndots:2`).
 
 ## Consequências e riscos
 

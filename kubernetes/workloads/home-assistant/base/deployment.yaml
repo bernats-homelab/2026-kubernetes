@@ -19,6 +19,14 @@ spec:
   template:
     spec:
       automountServiceAccountToken: false
+      # Com o ndots:5 padrão, nomes externos (api.amazon.com) passam antes pelos 4
+      # domínios de busca, em A e AAAA. O resolvedor assíncrono do HA (c-ares) estoura
+      # o timeout nessa cascata sem cache e a integração Alexa Devices falha. Com 2,
+      # nomes com 2+ pontos vão direto; os internos usam o FQDN (*.svc.cluster.local).
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
       initContainers:
         # O configuration.yaml inclui estes arquivos, que a UI edita: cria vazios só
         # na primeira vez (nunca sobrescreve o que a UI salvou).
