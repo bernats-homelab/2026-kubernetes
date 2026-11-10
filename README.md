@@ -143,6 +143,45 @@ O Home Assistant roda no cluster e abre em `https://casa.<sua-tailnet>`. O `conf
 3. **Alexa:** ative na conta Amazon o 2FA por app autenticador (SMS não serve) e adicione a integração **Alexa Devices** em *Settings → Devices & services*. A lista de compras vira uma entidade `todo`.
 4. **grocery-ops:** crie um usuário `grocery-ops` no HA, gere um *long-lived access token* no perfil dele e guarde-o como `*.sops.yaml` no `deploy/` do repo do grocery-ops. O app chama `http://home-assistant.home-assistant.svc:8123` (contrato no ADR 009).
 
+## Backup off-site do NAS (restic → Hetzner Storage Box)
+
+Todo dia às 05:00 o CronJob `restic-backup` (namespace `backup`) envia a raiz do SSD do NAS para um Storage Box BX11 da Hetzner. Ele lê pelo NFS em modo só leitura, envia por SFTP com criptografia do restic e mantém 7 snapshots diários, 4 semanais e 6 mensais. O Storage Box tira ainda 7 snapshots diários próprios. O box é criado pelo OpenTofu (`infra/hetzner/`), com o state criptografado no git. Veja o [ADR 010](docs/adr/010-offsite-backup-hetzner-restic.md).
+
+A chave SSH do restic (`infra/hetzner/restic_ed25519.pub` + Secret SOPS) e a senha do repositório já estão no repo. Para colocar no ar:
+
+1. **Senha do restic no gerenciador de senhas.** Sem ela o backup é irrecuperável:
+   ```bash
+   sops -d kubernetes/workloads/backup/overlays/nas/restic.sops.yaml | grep RESTIC_PASSWORD
+   ```
+2. **Token da Hetzner:** crie um token *Read & Write* no projeto do Hetzner Console e grave-o em `HCLOUD_TOKEN`:
+   ```bash
+   sops edit infra/hetzner/secrets.sops.yaml
+   ```
+3. **Criar o box** (gera cobrança; o `apply` pede confirmação):
+   ```bash
+   make tofu-plan
+   ```
+   ```bash
+   make tofu-apply
+   ```
+   Commite o `infra/hetzner/terraform.tfstate`. Ele sai criptografado; confira com `grep -c '"password"' infra/hetzner/terraform.tfstate`, que deve dar 0.
+4. **Preencher o repositório e o known_hosts** no Secret do restic, depois commitar:
+   ```bash
+   make backup-secret
+   ```
+5. **PV do NAS:** `make plan` e `make apply` criam o PV `backup-source`. É o mesmo export das fotos, sem mudança no OMV.
+6. **Primeira execução:** depois do sync do ArgoCD, dispare o envio inicial sem esperar as 05:00:
+   ```bash
+   kubectl -n backup create job --from=cronjob/restic-backup restic-inicial
+   ```
+   Ele leva dias. Cada execução é cortada em 22h e a do dia seguinte continua de onde parou; até lá o alerta `backup-offsite-stale` fica disparado.
+
+**Restaurar** (da WSL, com `restic` instalado):
+```bash
+sops -d kubernetes/workloads/backup/overlays/nas/restic.sops.yaml > /tmp/restic.yaml
+```
+Com `/tmp/restic.yaml` em mãos, grave `id_ed25519` (modo 600), `known_hosts` e a senha em arquivos e use `restic -r <RESTIC_REPOSITORY> -o sftp.args="-i <chave> -o UserKnownHostsFile=<known_hosts>" snapshots`. Depois use `restore latest --target <dir>` (com `--include` para uma pasta) ou `mount`. Apague os arquivos em `/tmp` ao terminar. Se o repositório tiver sido apagado ou corrompido, restaure antes um snapshot do Storage Box no painel da Hetzner.
+
 ## Observabilidade (OpenTelemetry + Grafana)
 
 Logs, métricas e traces do cluster, do notebook e do NAS chegam por OTLP ao `otel-gateway` e seguem para Prometheus, Loki e Tempo, todos no namespace `observability`. Veja o [ADR 008](docs/adr/008-observability-otel-lgtm.md).
@@ -298,6 +337,7 @@ kubernetes/values/    values dos charts upstream
 kubernetes/workloads/ manifests (kustomize) dos workloads
 kubernetes/bootstrap/ Application raiz (template renderizado pelo Ansible)
 hosts/nas/            arquivos aplicados à mão no NAS pela UI do OMV (coletor OTel)
+infra/hetzner/        OpenTofu do Storage Box do backup off-site (state criptografado no git)
 scripts/              setup do controle e checagens usadas pelo pre-commit/CI (inclui o stub do KSOPS)
 tests/ci-age.key      chave age PÚBLICA de teste do CI (só o demo do hello-world)
 docs/adr/             decisões de arquitetura

@@ -1,0 +1,13 @@
+# Vinculada ao PV NFS backup-source (role nas_storage): raiz do SSD do NAS, só leitura.
+# PVC é imutável: o nome e o volumeName não mudam depois do primeiro sync.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-source
+spec:
+  storageClassName: ""
+  volumeName: backup-source
+  accessModes: [ReadOnlyMany]
+  resources:
+    requests:
+      storage: 1Ti

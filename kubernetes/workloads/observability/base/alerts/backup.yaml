@@ -1,0 +1,71 @@
+# Backup off-site do NAS: CronJob restic-backup (namespace backup) -> Storage Box da
+# Hetzner (ADR 010). Os logs do pod chegam ao Loki pelo otel-agent; o restic loga uma
+# linha JSON com "message_type":"summary" ao terminar cada backup.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: backup
+    folder: Homelab
+    interval: 5m
+    rules:
+      # Roda todo dia às 05:00. Durante o envio inicial (vários dias, cada execução
+      # cortada em 22h) este alerta dispara até o primeiro backup completo terminar.
+      - uid: backup-offsite-stale
+        title: Backup off-site sem execução bem-sucedida em 26h
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            Nenhum backup do restic terminou nas últimas 26h: a cópia do NAS no Storage Box está
+            desatualizada (veja os logs de k8s_namespace_name=backup)
+        data:
+          - refId: A
+            relativeTimeRange: {from: 93600, to: 0}
+            datasourceUid: loki
+            model:
+              refId: A
+              queryType: instant
+              expr: absent_over_time({k8s_namespace_name="backup"} |= `"message_type":"summary"` [26h])
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}
+
+      # O k8s-job-failed (kubernetes.yaml) é só info; aqui é warning para chegar por
+      # e-mail. Os Jobs somem 20h depois de terminar (ttlSecondsAfterFinished), então o
+      # alerta se resolve sozinho. Código 3 do restic (arquivo ilegível) também falha.
+      - uid: backup-offsite-failed
+        title: Backup off-site falhou
+        condition: B
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            {{ $labels.k8s_job_name }}: o restic falhou; veja os logs do Job (linhas
+            "message_type":"homelab" e "error")
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                k8s_job_failed_pods{k8s_namespace_name="backup"}
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0]}

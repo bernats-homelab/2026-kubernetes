@@ -96,6 +96,13 @@ repos:
         pass_filenames: false
         files: ^(kubernetes/workloads/observability/base/alerts/|scripts/check-alert-rules\.py)
 
+      - id: tofu-validate
+        name: tofu fmt + validate (infra/)
+        language: script
+        entry: scripts/tofu-validate.sh
+        pass_filenames: false
+        files: ^(infra/|scripts/tofu-validate\.sh)
+
       - id: helm-lint
         name: helm lint --strict (chart app-of-apps)
         language: system

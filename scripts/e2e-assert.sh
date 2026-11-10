@@ -7,7 +7,7 @@ kubectl() { sudo /usr/local/bin/k3s kubectl "$@"; }
 echo "==> node Ready"
 kubectl wait --for=condition=Ready node --all --timeout=300s
 
-for app in root argocd hello-world cloudnative-pg immich-database immich obsidian home-assistant-database home-assistant k8s-app-smoke grocery-ops prometheus loki tempo observability otel-gateway otel-agent grafana; do
+for app in root argocd hello-world cloudnative-pg immich-database immich obsidian home-assistant-database home-assistant backup k8s-app-smoke grocery-ops prometheus loki tempo observability otel-gateway otel-agent grafana; do
   echo "==> Application ${app} Synced + Healthy"
   kubectl -n argocd wait "application/${app}" --for=create --timeout=300s
   kubectl -n argocd wait "application/${app}" --for=jsonpath='{.status.sync.status}'=Synced --timeout=600s
@@ -64,6 +64,17 @@ manifest="$(kubectl get --raw /api/v1/namespaces/home-assistant/services/home-as
 grep -q "Home Assistant" <<<"${manifest}" || {
   echo "ERRO: resposta inesperada do Home Assistant:" >&2
   head -c 500 <<<"${manifest}" >&2
+  exit 1
+}
+
+echo "==> Backup: o script do restic roda ponta a ponta (repositório local no CI)"
+kubectl -n backup delete job e2e-backup --ignore-not-found
+kubectl -n backup create job e2e-backup --from=cronjob/restic-backup
+kubectl -n backup wait job/e2e-backup --for=condition=Complete --timeout=600s
+backup_log="$(kubectl -n backup logs job/e2e-backup)"
+grep -q '"message_type":"summary"' <<<"${backup_log}" || {
+  echo "ERRO: o restic não logou o summary do backup:" >&2
+  echo "${backup_log}" >&2
   exit 1
 }
 

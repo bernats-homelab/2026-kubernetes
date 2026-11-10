@@ -32,3 +32,6 @@ configMapGenerator:
   - name: grafana-alert-rules-nas
     files:
       - alerts/nas.yaml
+  - name: grafana-alert-rules-backup
+    files:
+      - alerts/backup.yaml
