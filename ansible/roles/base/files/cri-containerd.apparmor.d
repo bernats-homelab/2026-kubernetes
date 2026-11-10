@@ -3,7 +3,7 @@
 # Perfil AppArmor padrão dos containers (RuntimeDefault). É o template do
 # containerd v2.3.4 (contrib/apparmor/template.go) renderizado como o containerd
 # faria neste host (abi 3.0, tunables/global, abstractions/base, daemon
-# unconfined), MAIS as duas regras marcadas com "stacked" abaixo.
+# unconfined), MAIS as duas regras marcadas com "stacked" e a regra "homelab" de D-Bus abaixo.
 #
 # Por quê: com kernel.apparmor_restrict_unprivileged_unconfined=1 (Ubuntu 26.04,
 # kernel 7.0.0-42+) o change_onexec do runc vira stacking e os processos do
@@ -42,6 +42,11 @@ profile cri-containerd.apparmor.d flags=(attach_disconnected,mediate_deleted) {
   signal (send,receive) peer=cri-containerd.apparmor.d,
   # stacked: mesmo peer com o rótulo empilhado (containerd#14485).
   signal (send,receive) peer="cri-containerd.apparmor.d//&unconfined",
+
+  # homelab: D-Bus do sistema com os serviços não confinados do host (dbus-daemon,
+  # BlueZ). Só alcança o barramento quem monta /run/dbus do host: hoje apenas o
+  # Home Assistant (Bluetooth, ADR 009). Sem o socket montado, a regra não abre nada.
+  dbus (send,receive) bus=system peer=(label=unconfined),
 
   deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir)
   # deny write to files not in /proc/<number>/** or /proc/sys/**

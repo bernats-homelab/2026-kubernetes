@@ -15,12 +15,11 @@ automation: !include automations.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
 
-# O proxy do Tailscale (Ingress "casa") chega pela rede de pods do k3s; o IP muda a
-# cada recriação do proxy, então a confiança vai para o CIDR inteiro.
-http:
-  use_x_forwarded_for: true
-  trusted_proxies:
-    - 10.42.0.0/16
+# Sem bloco http: desde o 2026.8 o HA guarda essa config em /config/.storage/http e
+# ignora o YAML; mudanças só valem depois de confirmadas na UI em até 5 min após o
+# restart. O proxy do Tailscale (Ingress "casa") chega pela rede de pods, então em
+# Settings > System > Network > HTTP server: "Trust X-Forwarded-For" ligado e
+# "Trusted proxies" = 10.42.0.0/16 (passo a passo no README).
 
 # Histórico no Postgres (CNPG); DB_URL vem do Secret home-assistant-database-app.
 recorder:

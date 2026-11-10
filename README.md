@@ -139,9 +139,10 @@ O Obsidian desktop roda no cluster ([linuxserver/obsidian](https://docs.linuxser
 O Home Assistant roda no cluster e abre em `https://casa.<sua-tailnet>`. O `configuration.yaml` vem do Git ([kubernetes/workloads/home-assistant/base/configuration.yaml](kubernetes/workloads/home-assistant/base/configuration.yaml)); o resto do `/config` fica no NAS e o histórico no Postgres (CNPG). No notebook ele usa `hostNetwork` (descoberta na LAN; também responde em `<IP do notebook>:8123`) e o Bluetooth do host via D-Bus. Veja o [ADR 009](docs/adr/009-home-assistant.md).
 
 1. **NAS (UI do OMV):** crie a shared folder `home-assistant` e um share NFS **Read/Write** para `<IP Tailscale do notebook>/32` com as mesmas opções do `immich-data`. Coloque o path em `nas_storage_exports.home_assistant` e rode `make plan` e `make apply`.
-2. **Primeiro acesso:** abra `https://casa.<sua-tailnet>` e crie o usuário dono.
-3. **Alexa:** ative na conta Amazon o 2FA por app autenticador (SMS não serve) e adicione a integração **Alexa Devices** em *Settings → Devices & services*. A lista de compras vira uma entidade `todo`.
-4. **grocery-ops:** crie um usuário `grocery-ops` no HA, gere um *long-lived access token* no perfil dele e guarde-o como `*.sops.yaml` no `deploy/` do repo do grocery-ops. O app chama `http://home-assistant.home-assistant.svc:8123` (contrato no ADR 009).
+2. **Primeiro acesso (direto, sem o proxy):** abra `http://<IP do notebook>:8123` (LAN ou IP Tailscale do notebook; funciona por causa do `hostNetwork`) e crie o usuário dono. Pelo `https://casa.<sua-tailnet>` o HA responde 400 até o passo seguinte.
+3. **Confiar no proxy do Tailscale:** desde o 2026.8 a config HTTP é só pela UI (o bloco `http:` do YAML é ignorado). Em *Settings → System → Network → HTTP server*, ligue *Trust X-Forwarded-For*, coloque `10.42.0.0/16` em *Trusted proxies* e salve. O HA reinicia e pede confirmação: **confirme em até 5 minutos, ainda pelo acesso direto**, senão ele volta à config anterior. Depois disso `https://casa.<sua-tailnet>` funciona.
+4. **Alexa:** ative na conta Amazon o 2FA por app autenticador (SMS não serve) e adicione a integração **Alexa Devices** em *Settings → Devices & services*. A lista de compras vira uma entidade `todo`.
+5. **grocery-ops:** crie um usuário `grocery-ops` no HA, gere um *long-lived access token* no perfil dele e guarde-o como `*.sops.yaml` no `deploy/` do repo do grocery-ops. O app chama `http://home-assistant.home-assistant.svc:8123` (contrato no ADR 009).
 
 ## Observabilidade (OpenTelemetry + Grafana)
 

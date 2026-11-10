@@ -11,7 +11,7 @@ Queremos que itens falados para a Alexa ("Alexa, coloca leite na lista de compra
 
 - **Kustomize próprio** em `kubernetes/workloads/home-assistant`, como o Obsidian (ADR 006). Não existe chart oficial, e os da comunidade economizariam só uns 5 manifestos.
 - **Imagem oficial** `ghcr.io/home-assistant/home-assistant` fixada por tag + digest.
-- **`configuration.yaml` no Git** (ConfigMap montado por `subPath`). O resto do `/config` (`.storage`: integrações, usuários, tokens) fica numa PVC no **NAS por NFS**, via role `nas_storage`, e entra na réplica do NAS.
+- **`configuration.yaml` no Git** (ConfigMap montado por `subPath`), sem o bloco `http:` (veja os riscos). O resto do `/config` (`.storage`: integrações, usuários, tokens) fica numa PVC no **NAS por NFS**, via role `nas_storage`, e entra na réplica do NAS.
 - **Recorder no Postgres** (CloudNativePG, Application `home-assistant-database`, wave 2). O HA lê a URI do Secret gerado pelo CNPG com `!env_var DB_URL`.
 - **Só no notebook (overlay `tailscale`)**:
   - `hostNetwork`, para a descoberta mDNS/SSDP na LAN. O pod só escuta na rede do host, sem alterar rede, firewall ou SSH. Efeito colateral: o HA também responde em `<IP do notebook>:8123` na LAN.
@@ -32,6 +32,7 @@ O grocery-ops ainda não implementa a integração. A infra deixa pronto:
 ## Consequências e riscos
 
 - A integração Alexa Devices exige 2FA por app autenticador na conta Amazon (SMS não serve). O suporte a amazon.com.br não está documentado; se não funcionar, a alternativa é a integração HACS `ocean90/alexa_shopping_sync`.
-- O perfil AppArmor customizado do containerd (role `base`) não tem regras de `dbus`. Se o BlueZ negar o acesso, o perfil precisa de uma regra estreita para o barramento do sistema.
+- O perfil AppArmor customizado do containerd (role `base`) negava o D-Bus (`Hello`, `AddMatch`). Ganhou a regra `dbus (send,receive) bus=system peer=(label=unconfined)`: só alcança o barramento quem monta `/run/dbus` do host, hoje apenas o HA.
+- **A config HTTP (proxy confiável) não é declarativa.** Desde o 2026.8 o HA guarda `use_x_forwarded_for`/`trusted_proxies` em `/config/.storage/http`, ignora o bloco `http:` do YAML e só promove uma mudança se um admin confirmar na UI em até 5 minutos após o restart. Ela é feita uma vez pela UI (README) e persiste no NAS. Até lá o Ingress responde 400; o primeiro acesso é direto em `<IP do notebook>:8123`.
 - Métricas do HA (`/api/prometheus`) ficam para depois: exigem um token criado na UI e montado no otel-agent. Os logs já chegam ao Loki pelo coletor.
 - Não há backup do Postgres do HA além do disco do notebook. O histórico é descartável; o que importa (integrações, automações) fica no `/config` do NAS.
