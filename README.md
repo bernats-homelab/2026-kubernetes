@@ -24,6 +24,7 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
 - **Nada identificável no repo.** O inventário real fica em `ansible/inventory/local.yaml` (ignorado pelo git e barrado por hook). O nome da tailnet (`*.ts.net`) é descoberto em runtime e barrado pelo gitleaks. Os kubeconfigs ficam em `~/.kube/`.
 - **Segredos com SOPS + age.** A chave privada fica só no WSL. O Ansible descriptografa no controller e cria os Secrets do bootstrap com `no_log` (veja [ADR 002](docs/adr/002-sops-age-secrets.md)). Os segredos dos apps são commitados criptografados ao lado do app, e o ArgoCD os descriptografa com KSOPS usando uma chave age própria do cluster (veja [ADR 004](docs/adr/004-ksops.md)).
 - **Tampa fechada na energia não suspende.** O role `power` configura o `systemd-logind` (`HandleLidSwitchExternalPower=ignore` e `HandleLidSwitchDocked=ignore`) e confere via D-Bus que o valor efetivo foi aplicado. Na bateria continua valendo o padrão do sistema (suspender).
+- **Atualizações do Ubuntu sem surpresa.** O role `os_updates` roda o unattended-upgrades às 05:15, com prioridade idle de CPU e I/O, e tira o kernel (`linux-*`) do automático: kernel só com `make kernel-upgrade`, que reinicia e valida o cluster. Veja o [ADR 010](docs/adr/010-notebook-os-updates.md).
 - **Versões fixadas com sha256** para k3s (instalador), helm, kubectl, sops, age, kubeconform, kube-linter e kustomize. A imagem do hello-world é fixada por digest.
 - **Uma fonte por versão.** As versões dos charts ficam só em [kubernetes/apps/values.yaml](kubernetes/apps/values.yaml), que o Ansible também lê no bootstrap.
 
@@ -235,6 +236,7 @@ Os dois são opcionais: sem eles, apps de repos públicos com imagens públicas 
 | `make plan` | Dry-run (`--check --diff`) contra o notebook |
 | `make apply` | Roda `lint` e depois aplica |
 | `make idempotency` | Reaplica e falha se algo mudar |
+| `make kernel-upgrade` | Instala o kernel novo, reinicia o notebook e só remove o antigo se nó, Applications, Postgres e AppArmor estiverem ok ([ADR 010](docs/adr/010-notebook-os-updates.md)) |
 | `make kubeconfig` | Grava `~/.kube/notebook.yaml` apontando para `https://<host>.<tailnet>:6443` |
 | `make reset` | Remove o k3s (pede confirmação; não toca Tailscale nem SSH) |
 | `make test` | lint + helm unittest + render/kubeconform/kube-linter |

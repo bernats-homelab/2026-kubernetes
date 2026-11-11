@@ -13,6 +13,8 @@
       tags: [preflight, always]
     - role: base
       tags: [base]
+    - role: os_updates
+      tags: [os_updates]
     - role: power
       tags: [power]
     - role: tailscale_check

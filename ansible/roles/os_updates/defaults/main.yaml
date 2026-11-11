@@ -1,0 +1,8 @@
+# Atualizações automáticas do Ubuntu (ADR 010). O unattended-upgrades continua
+# instalando segurança, mas em horário fixo e com prioridade mínima de CPU/I/O; o
+# kernel sai do automático e passa a ser atualizado com `make kernel-upgrade`.
+os_updates_download_time: "05:00"
+os_updates_upgrade_time: "05:15"
+# Regex (com âncora no início) dos pacotes que o unattended-upgrades não toca.
+os_updates_blacklist:
+  - "linux-"

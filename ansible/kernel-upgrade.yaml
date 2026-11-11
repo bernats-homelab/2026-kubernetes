@@ -1,0 +1,94 @@
+# Atualização controlada do kernel do notebook (ADR 010). O unattended-upgrades não
+# toca em linux-* (role os_updates); este playbook instala o kernel novo, reinicia
+# e só remove o kernel antigo depois de validar o cluster. Uso: make kernel-upgrade.
+- name: Atualizar o kernel e validar o cluster
+  hosts: k3s_server
+  become: true
+  gather_facts: false
+  vars:
+    kernel_upgrade_kubectl: /usr/local/bin/k3s kubectl
+  tasks:
+    - name: Listar pacotes do kernel com atualização
+      ansible.builtin.shell: |
+        set -o pipefail
+        apt-get update -qq
+        apt list --upgradable 2>/dev/null | awk -F/ '/^linux-/ {print $1}'
+      args:
+        executable: /bin/bash
+      register: kernel_upgrade_pending
+      changed_when: false
+      check_mode: false
+
+    - name: Instalar a atualização do kernel
+      ansible.builtin.apt:
+        name: "{{ kernel_upgrade_pending.stdout_lines }}"
+        state: latest # noqa package-latest
+        only_upgrade: true
+      when: kernel_upgrade_pending.stdout_lines | length > 0
+
+    - name: Ler o kernel em execução e o mais novo instalado
+      ansible.builtin.shell: |
+        set -o pipefail
+        uname -r
+        find /boot -maxdepth 1 -name 'vmlinuz-*-generic' -printf '%f\n' | sed 's/^vmlinuz-//' | sort -V | tail -1
+      args:
+        executable: /bin/bash
+      register: kernel_upgrade_versions
+      changed_when: false
+      check_mode: false
+
+    - name: Reiniciar no kernel novo
+      ansible.builtin.reboot:
+        msg: "make kernel-upgrade: reiniciando no kernel {{ kernel_upgrade_versions.stdout_lines[1] }}"
+        reboot_timeout: 900
+      when: kernel_upgrade_versions.stdout_lines[0] != kernel_upgrade_versions.stdout_lines[1]
+
+    - name: Conferir o kernel depois do boot
+      ansible.builtin.command: uname -r
+      register: kernel_upgrade_running
+      changed_when: false
+      check_mode: false
+      failed_when: kernel_upgrade_running.stdout != kernel_upgrade_versions.stdout_lines[1]
+
+    - name: Esperar o nó ficar Ready
+      ansible.builtin.command: "{{ kernel_upgrade_kubectl }} wait --for=condition=Ready node --all --timeout=600s"
+      changed_when: false
+      check_mode: false
+
+    - name: Esperar todas as Applications Synced e Healthy
+      ansible.builtin.shell: |
+        set -o pipefail
+        {{ kernel_upgrade_kubectl }} -n argocd get applications \
+          -o jsonpath='{range .items[*]}{.metadata.name}={.status.sync.status}/{.status.health.status}{"\n"}{end}' \
+          | grep -v '=Synced/Healthy$' || true
+      args:
+        executable: /bin/bash
+      register: kernel_upgrade_apps
+      changed_when: false
+      check_mode: false
+      until: kernel_upgrade_apps.stdout | length == 0
+      retries: 60
+      delay: 15
+
+    - name: Esperar os Postgres (CNPG) prontos
+      ansible.builtin.command: >-
+        {{ kernel_upgrade_kubectl }} wait clusters.postgresql.cnpg.io --all -A
+        --for=condition=Ready --timeout=600s
+      changed_when: false
+      check_mode: false
+
+    - name: Procurar negações do AppArmor desde o boot (sinais e D-Bus)
+      ansible.builtin.shell: |
+        set -o pipefail
+        journalctl -k -b --no-pager | grep 'apparmor="DENIED"' | grep -E 'operation="(signal|dbus)' || true
+      args:
+        executable: /bin/bash
+      register: kernel_upgrade_denied
+      changed_when: false
+      check_mode: false
+      failed_when: kernel_upgrade_denied.stdout | length > 0
+
+    - name: Remover kernels antigos (o apt mantém o atual e o anterior)
+      ansible.builtin.apt:
+        autoremove: true
+        purge: true
