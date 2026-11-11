@@ -31,11 +31,11 @@ resource "hcloud_storage_box" "nas_offsite" {
 
   # Snapshots do lado da Hetzner, fora do alcance da chave SSH do cluster: se o
   # repositório restic for apagado ou corrompido, volta-se até 7 dias. Rodam às
-  # 07:00 UTC (04:00 em Brasília), antes do backup das 05:00, então guardam o estado
+  # 06:00 UTC (03:00 em Brasília), antes do backup das 04:00, então guardam o estado
   # anterior ao prune do dia. Não custam à parte, mas ocupam a cota do box.
   snapshot_plan = {
     max_snapshots = 7
-    hour          = 7
+    hour          = 6
     minute        = 0
   }
 

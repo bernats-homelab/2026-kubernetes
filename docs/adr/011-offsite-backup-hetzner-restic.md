@@ -27,7 +27,7 @@ Preços consultados em 2026-11-08, sem impostos, para 600 GB:
   - O token da API e a passphrase do state ficam em `infra/hetzner/secrets.sops.yaml`, que só a chave da WSL abre.
   - `ssh_keys` não pode ser alterado pela API (mudar recriaria o box). Por isso há `ignore_changes` e `prevent_destroy`, além do `delete_protection` do lado da Hetzner.
 - **Ferramenta:** **restic** por SFTP (porta 23), com criptografia no cliente, deduplicação e versões. A senha do repositório fica só no Secret SOPS e no gerenciador de senhas.
-- **Onde roda:** CronJob `restic-backup` no k3s (namespace `backup`), às 05:00, depois da réplica local e do dump do Postgres do Immich. Não no NAS, porque:
+- **Onde roda:** CronJob `restic-backup` no k3s (namespace `backup`), às 04:00, depois da réplica local e do dump do Postgres do Immich e antes do unattended-upgrades do notebook (05:15, ADR 010). Não no NAS, porque:
   - o NAS é configurado só pela UI e o repo nunca altera o NAS;
   - no cluster ficam GitOps, imagem por digest, segredo em KSOPS e alertas no stack existente;
   - o NAS (T400, sistema em USB 2.0) já é frágil.
@@ -35,7 +35,7 @@ Preços consultados em 2026-11-08, sem impostos, para 600 GB:
 - **Escopo:** a raiz do SSD inteira (export `photos`, PV `backup-source`, só leitura). Isso inclui `data-with-backup`, `data-without-backup` e `immich-data` (uploads e dumps do Postgres).
 - **Retenção:**
   - restic: 7 diários, 4 semanais, 6 mensais. O `forget` roda todo dia; o `prune` e o `check --read-data-subset=5%` rodam aos domingos.
-  - Snapshots automáticos do Storage Box: 7 diários às 07:00 UTC, antes do backup. Ficam fora do alcance da chave SSH do cluster: se ela for usada para apagar o repositório, dá para voltar até uma semana. Não têm custo à parte, mas ocupam a cota.
+  - Snapshots automáticos do Storage Box: 7 diários às 06:00 UTC (03:00 em Brasília), antes do backup. Ficam fora do alcance da chave SSH do cluster: se ela for usada para apagar o repositório, dá para voltar até uma semana. Não têm custo à parte, mas ocupam a cota.
 
 ## Consequências e riscos
 

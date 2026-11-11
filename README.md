@@ -147,7 +147,7 @@ O Home Assistant roda no cluster e abre em `https://casa.<sua-tailnet>`. O `conf
 
 ## Backup off-site do NAS (restic → Hetzner Storage Box)
 
-Todo dia às 05:00 o CronJob `restic-backup` (namespace `backup`) envia a raiz do SSD do NAS para um Storage Box BX11 da Hetzner. Ele lê pelo NFS em modo só leitura, envia por SFTP com criptografia do restic e mantém 7 snapshots diários, 4 semanais e 6 mensais. O Storage Box tira ainda 7 snapshots diários próprios. O box é criado pelo OpenTofu (`infra/hetzner/`), com o state criptografado no git. Veja o [ADR 011](docs/adr/011-offsite-backup-hetzner-restic.md).
+Todo dia às 04:00 o CronJob `restic-backup` (namespace `backup`) envia a raiz do SSD do NAS para um Storage Box BX11 da Hetzner. Ele lê pelo NFS em modo só leitura, envia por SFTP com criptografia do restic e mantém 7 snapshots diários, 4 semanais e 6 mensais. O Storage Box tira ainda 7 snapshots diários próprios. O box é criado pelo OpenTofu (`infra/hetzner/`), com o state criptografado no git. Veja o [ADR 011](docs/adr/011-offsite-backup-hetzner-restic.md).
 
 A chave SSH do restic (`infra/hetzner/restic_ed25519.pub` + Secret SOPS) e a senha do repositório já estão no repo. Para colocar no ar:
 
@@ -172,7 +172,7 @@ A chave SSH do restic (`infra/hetzner/restic_ed25519.pub` + Secret SOPS) e a sen
    make backup-secret
    ```
 5. **PV do NAS:** `make plan` e `make apply` criam o PV `backup-source`. É o mesmo export das fotos, sem mudança no OMV.
-6. **Primeira execução:** depois do sync do ArgoCD, dispare o envio inicial sem esperar as 05:00:
+6. **Primeira execução:** depois do sync do ArgoCD, dispare o envio inicial sem esperar as 04:00:
    ```bash
    kubectl -n backup create job --from=cronjob/restic-backup restic-inicial
    ```

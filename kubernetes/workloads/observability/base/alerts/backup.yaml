@@ -8,7 +8,7 @@ groups:
     folder: Homelab
     interval: 5m
     rules:
-      # Roda todo dia às 05:00. Durante o envio inicial (vários dias, cada execução
+      # Roda todo dia às 04:00. Durante o envio inicial (vários dias, cada execução
       # cortada em 22h) este alerta dispara até o primeiro backup completo terminar.
       - uid: backup-offsite-stale
         title: Backup off-site sem execução bem-sucedida em 26h
