@@ -31,7 +31,8 @@ O grocery-ops ainda não implementa a integração. A infra deixa pronto:
 
 ## Consequências e riscos
 
-- A integração Alexa Devices exige 2FA por app autenticador na conta Amazon (SMS não serve). O suporte a amazon.com.br não está documentado; se não funcionar, a alternativa é a integração HACS `ocean90/alexa_shopping_sync`.
+- A integração Alexa Devices exige 2FA por app autenticador na conta Amazon (SMS não serve). A amazon.com.br funciona (testado em 2026-11-10).
+- **Polling da Alexa Devices desligado (só pela UI, em *System options*).** Com o polling a cada 5 min, as chamadas por Echo estouram o limite da Amazon: metade dos ciclos recebia 429 e todas as entidades ficavam `unavailable`. As listas de compras e de tarefas chegam por eventos push, então a sincronização nos dois sentidos continua; perdem-se só os sensores e o estado dos Echos. Ao recriar a integração, desligue de novo.
 - O perfil AppArmor customizado do containerd (role `base`) negava o D-Bus (`Hello`, `AddMatch`). Ganhou a regra `dbus (send,receive) bus=system peer=(label=unconfined)`: só alcança o barramento quem monta `/run/dbus` do host, hoje apenas o HA.
 - **A config HTTP (proxy confiável) não é declarativa.** Desde o 2026.8 o HA guarda `use_x_forwarded_for`/`trusted_proxies` em `/config/.storage/http`, ignora o bloco `http:` do YAML e só promove uma mudança se um admin confirmar na UI em até 5 minutos após o restart. Ela é feita uma vez pela UI (README) e persiste no NAS. Até lá o Ingress responde 400; o primeiro acesso é direto em `<IP do notebook>:8123`.
 - Métricas do HA (`/api/prometheus`) ficam para depois: exigem um token criado na UI e montado no otel-agent. Os logs já chegam ao Loki pelo coletor.
