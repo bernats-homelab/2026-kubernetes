@@ -1,0 +1,17 @@
+argument_specs:
+  main:
+    short_description: Unattended-upgrades em janela fixa, com baixa prioridade e sem kernel
+    options:
+      os_updates_download_time:
+        description: Horário (HH:MM) do apt-daily.timer (download das listas e pacotes)
+        type: str
+        default: "05:00"
+      os_updates_upgrade_time:
+        description: Horário (HH:MM) do apt-daily-upgrade.timer (instalação)
+        type: str
+        default: "05:15"
+      os_updates_blacklist:
+        description: Regex de pacotes fora do unattended-upgrades (kernel vai por make kernel-upgrade)
+        type: list
+        elements: str
+        default: ["linux-"]

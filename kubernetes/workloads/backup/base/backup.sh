@@ -1,5 +1,5 @@
 #!/bin/sh
-# Backup off-site do NAS (ADR 010). Roda na imagem restic/restic (Alpine, busybox sh).
+# Backup off-site do NAS (ADR 011). Roda na imagem restic/restic (Alpine, busybox sh).
 #   /config  RESTIC_REPOSITORY, RESTIC_PASSWORD e, em produção, id_ed25519 + known_hosts
 #   /source  o que vai para o backup (raiz do SSD do NAS, NFS read-only)
 #   /cache   cache do restic (índices e árvores; acelera o incremental)

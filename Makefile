@@ -17,7 +17,7 @@ INVENTORY := ansible/inventory/local.yaml
 TOFU_DIR := infra/hetzner
 TOFU := sops exec-env $(TOFU_DIR)/secrets.sops.yaml
 
-.PHONY: help deps lint test-unit test-render test check-inventory plan apply idempotency kubeconfig reset \
+.PHONY: help deps lint test-unit test-render test check-inventory plan apply idempotency kernel-upgrade kubeconfig reset \
 	tofu-plan tofu-apply backup-secret
 
 help: ## Lista os targets
@@ -50,6 +50,9 @@ apply: check-inventory lint ## Aplica no notebook (roda lint antes)
 
 idempotency: check-inventory ## Reaplica e falha se algo mudar
 	cd ansible && ../scripts/assert-idempotent.sh site.yaml $(BECOME_FLAGS)
+
+kernel-upgrade: check-inventory ## Atualiza o kernel, reinicia o notebook e valida o cluster (ADR 010)
+	cd ansible && $(PLAYBOOK) kernel-upgrade.yaml
 
 kubeconfig: check-inventory ## Atualiza ~/.kube/notebook.yaml
 	cd ansible && $(PLAYBOOK) site.yaml --tags kubeconfig

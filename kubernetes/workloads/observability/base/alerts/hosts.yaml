@@ -39,6 +39,37 @@ groups:
               conditions:
                 - evaluator: {type: gt, params: [0.95]}
 
+      # Origem: awesome-prometheus-alerts (CC BY 4.0), HostUnusualDiskIo. Só o notebook:
+      # o pendrive do NAS vive ocupado. Incidente de 2026-11-11 (ADR 010): o
+      # unattended-upgrades deixou o SSD 84% ocupado e travou os SQLite do cluster.
+      - uid: host-disk-saturated
+        title: Disco do notebook saturado
+        condition: B
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.host_name }}: {{ $labels.device }} ocupado {{ humanizePercentage $values.A.Value }} do tempo"
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: >-
+                max by (host_name, device) (rate(system_disk_io_time_seconds_total{job="homelab-host",
+                device=~"sd[a-z]|nvme[0-9]+n[0-9]+"}[5m]))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: {type: gt, params: [0.7]}
+
       # Origem: awesome-prometheus-alerts (CC BY 4.0), HostDiskWillFillIn24Hours
       - uid: host-disk-fill-24h
         title: Disco raiz enche em 24h

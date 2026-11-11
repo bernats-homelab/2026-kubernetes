@@ -29,6 +29,10 @@ grafana.ini:
     reporting_enabled: false
   auth.anonymous:
     enabled: false
+  # SQLite em WAL: leitores (login, datasources, regras) não esperam as escritas.
+  # Sem isso, um pico de I/O no notebook deu SQLITE_BUSY por ~7 min (ADR 010).
+  database:
+    wal: true
   users:
     allow_sign_up: false
 

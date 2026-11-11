@@ -1,4 +1,4 @@
-# Cópia off-site do NAS: Storage Box da Hetzner (ADR 010). Rode só pela WSL:
+# Cópia off-site do NAS: Storage Box da Hetzner (ADR 011). Rode só pela WSL:
 # `make tofu-plan` / `make tofu-apply` (o token e a passphrase vêm de secrets.sops.yaml).
 terraform {
   required_version = "~> 1.13.0"

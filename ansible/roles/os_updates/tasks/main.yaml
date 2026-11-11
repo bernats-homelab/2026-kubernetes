@@ -1,0 +1,111 @@
+# Incidente de 2026-11-11 (ADR 010): o unattended-upgrades rodou em horário aleatório,
+# instalou um kernel (initramfs + módulos NVIDIA) e saturou o SSD; os SQLite do
+# Grafana e do k3s (kine) travaram por ~7 min.
+- name: Verificar se o unattended-upgrades e os timers do apt existem
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /usr/bin/unattended-upgrade
+    - /usr/lib/systemd/system/apt-daily-upgrade.timer
+  register: os_updates_present
+
+- name: Definir o que existe neste host
+  ansible.builtin.set_fact:
+    os_updates_has_unattended: "{{ os_updates_present.results[0].stat.exists }}"
+    os_updates_has_timers: "{{ os_updates_present.results[1].stat.exists }}"
+
+- name: Tirar o kernel do unattended-upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52homelab-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Gerenciado pelo Ansible (2026-kubernetes), role os_updates. Veja o ADR 010.
+      // Kernel só por `make kernel-upgrade` (instala, reinicia e valida o cluster).
+      Unattended-Upgrade::Package-Blacklist { {{ os_updates_blacklist | map('to_json') | join('; ') }}; };
+      // O kernel anterior fica como fallback; quem remove é o make kernel-upgrade.
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "false";
+  when: os_updates_has_unattended
+
+- name: Criar diretórios de drop-in do apt no systemd
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+    - apt-daily-upgrade.service
+  when: os_updates_has_timers
+
+- name: Fixar horário dos timers do apt (sem atraso aleatório)
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.unit }}.d/10-homelab.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Gerenciado pelo Ansible (2026-kubernetes), role os_updates. Veja o ADR 010.
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* {{ item.time }}
+      RandomizedDelaySec=0
+  loop:
+    - {unit: apt-daily.timer, time: "{{ os_updates_download_time }}"}
+    - {unit: apt-daily-upgrade.timer, time: "{{ os_updates_upgrade_time }}"}
+  loop_control:
+    label: "{{ item.unit }} {{ item.time }}"
+  when: os_updates_has_timers
+  notify: Recarregar timers do apt
+
+- name: Rodar o upgrade com prioridade mínima de CPU e I/O
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.service.d/10-homelab.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Gerenciado pelo Ansible (2026-kubernetes), role os_updates. Veja o ADR 010.
+      # O dpkg herda a prioridade: só usa disco/CPU quando o cluster não está usando.
+      [Service]
+      Nice=19
+      CPUSchedulingPolicy=idle
+      IOSchedulingClass=idle
+  when: os_updates_has_timers
+  notify: Recarregar timers do apt
+
+- name: Aplicar os drop-ins antes de verificar
+  ansible.builtin.meta: flush_handlers
+
+- name: Ler o horário efetivo do apt-daily-upgrade.timer
+  # O módulo systemd_service não expõe TimersCalendar; é só leitura.
+  ansible.builtin.command: systemctl show apt-daily-upgrade.timer --property=TimersCalendar --value # noqa: command-instead-of-module
+  register: os_updates_timer_calendar
+  changed_when: false
+  check_mode: false
+  when: os_updates_has_timers
+
+- name: Garantir que o timer usa só o horário fixo
+  ansible.builtin.assert:
+    that:
+      - os_updates_timer_calendar.stdout is search(os_updates_upgrade_time ~ ':00')
+      - os_updates_timer_calendar.stdout_lines | length == 1
+    fail_msg: "apt-daily-upgrade.timer: {{ os_updates_timer_calendar.stdout }}"
+  when: os_updates_has_timers and not ansible_check_mode
+
+- name: Ler a blacklist efetiva do unattended-upgrades
+  ansible.builtin.command: apt-config dump Unattended-Upgrade::Package-Blacklist
+  register: os_updates_blacklist_effective
+  changed_when: false
+  check_mode: false
+  when: os_updates_has_unattended
+
+- name: Garantir que a blacklist foi aplicada
+  ansible.builtin.assert:
+    that:
+      - (item | to_json) in os_updates_blacklist_effective.stdout
+  loop: "{{ os_updates_blacklist }}"
+  when: os_updates_has_unattended and not ansible_check_mode

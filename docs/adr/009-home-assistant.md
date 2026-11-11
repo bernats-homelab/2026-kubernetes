@@ -11,7 +11,7 @@ Queremos que itens falados para a Alexa ("Alexa, coloca leite na lista de compra
 
 - **Kustomize próprio** em `kubernetes/workloads/home-assistant`, como o Obsidian (ADR 006). Não existe chart oficial, e os da comunidade economizariam só uns 5 manifestos.
 - **Imagem oficial** `ghcr.io/home-assistant/home-assistant` fixada por tag + digest.
-- **`configuration.yaml` no Git** (ConfigMap montado por `subPath`). O resto do `/config` (`.storage`: integrações, usuários, tokens) fica numa PVC no **NAS por NFS**, via role `nas_storage`, e entra na réplica do NAS.
+- **`configuration.yaml` no Git** (ConfigMap montado por `subPath`), sem o bloco `http:` (veja os riscos). O resto do `/config` (`.storage`: integrações, usuários, tokens) fica numa PVC no **NAS por NFS**, via role `nas_storage`, e entra na réplica do NAS.
 - **Recorder no Postgres** (CloudNativePG, Application `home-assistant-database`, wave 2). O HA lê a URI do Secret gerado pelo CNPG com `!env_var DB_URL`.
 - **Só no notebook (overlay `tailscale`)**:
   - `hostNetwork`, para a descoberta mDNS/SSDP na LAN. O pod só escuta na rede do host, sem alterar rede, firewall ou SSH. Efeito colateral: o HA também responde em `<IP do notebook>:8123` na LAN.
@@ -27,11 +27,13 @@ O grocery-ops ainda não implementa a integração. A infra deixa pronto:
 - **Autenticação:** um usuário `grocery-ops` no HA com um *long-lived access token*. O token fica num `*.sops.yaml` no `deploy/` do repo do grocery-ops, não aqui.
 - **Leitura:** `POST /api/services/todo/get_items?return_response` com `{"entity_id": "todo.<lista>", "status": "needs_action"}`, ou o comando de websocket equivalente.
 - **Escrita:** `todo.add_item`, `todo.update_item` (marcar como comprado) e `todo.remove_item`.
-- **Push HA → app (quando houver endpoint):** automação com os gatilhos `todo.item_added`, `todo.item_completed` e `todo.item_removed` chamando um `rest_command` para `http://grocery-ops.grocery-ops.svc/...`.
+- **Push HA → app (quando houver endpoint):** automação com os gatilhos `todo.item_added`, `todo.item_completed` e `todo.item_removed` chamando um `rest_command` para `http://grocery-ops.grocery-ops.svc.cluster.local/...` (FQDN: o pod do HA usa `ndots:2`).
 
 ## Consequências e riscos
 
-- A integração Alexa Devices exige 2FA por app autenticador na conta Amazon (SMS não serve). O suporte a amazon.com.br não está documentado; se não funcionar, a alternativa é a integração HACS `ocean90/alexa_shopping_sync`.
-- O perfil AppArmor customizado do containerd (role `base`) não tem regras de `dbus`. Se o BlueZ negar o acesso, o perfil precisa de uma regra estreita para o barramento do sistema.
+- A integração Alexa Devices exige 2FA por app autenticador na conta Amazon (SMS não serve). A amazon.com.br funciona (testado em 2026-11-10).
+- **Polling da Alexa Devices desligado (só pela UI, em *System options*).** Com o polling a cada 5 min, as chamadas por Echo estouram o limite da Amazon: metade dos ciclos recebia 429 e todas as entidades ficavam `unavailable`. As listas de compras e de tarefas chegam por eventos push, então a sincronização nos dois sentidos continua; perdem-se só os sensores e o estado dos Echos. Ao recriar a integração, desligue de novo.
+- O perfil AppArmor customizado do containerd (role `base`) negava o D-Bus (`Hello`, `AddMatch`). Ganhou a regra `dbus (send,receive) bus=system peer=(label=unconfined)`: só alcança o barramento quem monta `/run/dbus` do host, hoje apenas o HA.
+- **A config HTTP (proxy confiável) não é declarativa.** Desde o 2026.8 o HA guarda `use_x_forwarded_for`/`trusted_proxies` em `/config/.storage/http`, ignora o bloco `http:` do YAML e só promove uma mudança se um admin confirmar na UI em até 5 minutos após o restart. Ela é feita uma vez pela UI (README) e persiste no NAS. Até lá o Ingress responde 400; o primeiro acesso é direto em `<IP do notebook>:8123`.
 - Métricas do HA (`/api/prometheus`) ficam para depois: exigem um token criado na UI e montado no otel-agent. Os logs já chegam ao Loki pelo coletor.
 - Não há backup do Postgres do HA além do disco do notebook. O histórico é descartável; o que importa (integrações, automações) fica no `/config` do NAS.

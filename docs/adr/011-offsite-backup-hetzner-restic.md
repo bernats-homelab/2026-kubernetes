@@ -1,4 +1,4 @@
-# 010 — Backup off-site do NAS: restic no cluster para um Storage Box da Hetzner
+# 011 — Backup off-site do NAS: restic no cluster para um Storage Box da Hetzner
 
 - **Status:** aceito
 - **Data:** 2026-11-09

@@ -60,7 +60,10 @@ kubectl -n home-assistant wait cluster.postgresql.cnpg.io/home-assistant-databas
 
 echo "==> Home Assistant serve /manifest.json"
 kubectl -n home-assistant rollout status deployment/home-assistant --timeout=900s
-manifest="$(kubectl get --raw /api/v1/namespaces/home-assistant/services/home-assistant:http/proxy/manifest.json)"
+# De dentro do pod: o proxy da API adiciona X-Forwarded-For, e o HA responde 400 a
+# proxies não confiáveis (a confiança é configurada pela UI, veja o ADR 009).
+manifest="$(kubectl -n home-assistant exec deployment/home-assistant -c home-assistant -- \
+  python3 -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8123/manifest.json").read().decode())')"
 grep -q "Home Assistant" <<<"${manifest}" || {
   echo "ERRO: resposta inesperada do Home Assistant:" >&2
   head -c 500 <<<"${manifest}" >&2

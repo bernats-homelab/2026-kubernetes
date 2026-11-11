@@ -24,6 +24,7 @@ WSL (controle)  ──ssh via Tailscale──▶  notebook (Ubuntu 26.04)
 - **Nada identificável no repo.** O inventário real fica em `ansible/inventory/local.yaml` (ignorado pelo git e barrado por hook). O nome da tailnet (`*.ts.net`) é descoberto em runtime e barrado pelo gitleaks. Os kubeconfigs ficam em `~/.kube/`.
 - **Segredos com SOPS + age.** A chave privada fica só no WSL. O Ansible descriptografa no controller e cria os Secrets do bootstrap com `no_log` (veja [ADR 002](docs/adr/002-sops-age-secrets.md)). Os segredos dos apps são commitados criptografados ao lado do app, e o ArgoCD os descriptografa com KSOPS usando uma chave age própria do cluster (veja [ADR 004](docs/adr/004-ksops.md)).
 - **Tampa fechada na energia não suspende.** O role `power` configura o `systemd-logind` (`HandleLidSwitchExternalPower=ignore` e `HandleLidSwitchDocked=ignore`) e confere via D-Bus que o valor efetivo foi aplicado. Na bateria continua valendo o padrão do sistema (suspender).
+- **Atualizações do Ubuntu sem surpresa.** O role `os_updates` roda o unattended-upgrades às 05:15, com prioridade idle de CPU e I/O, e tira o kernel (`linux-*`) do automático: kernel só com `make kernel-upgrade`, que reinicia e valida o cluster. Veja o [ADR 010](docs/adr/010-notebook-os-updates.md).
 - **Versões fixadas com sha256** para k3s (instalador), helm, kubectl, sops, age, kubeconform, kube-linter e kustomize. A imagem do hello-world é fixada por digest.
 - **Uma fonte por versão.** As versões dos charts ficam só em [kubernetes/apps/values.yaml](kubernetes/apps/values.yaml), que o Ansible também lê no bootstrap.
 
@@ -139,13 +140,14 @@ O Obsidian desktop roda no cluster ([linuxserver/obsidian](https://docs.linuxser
 O Home Assistant roda no cluster e abre em `https://casa.<sua-tailnet>`. O `configuration.yaml` vem do Git ([kubernetes/workloads/home-assistant/base/configuration.yaml](kubernetes/workloads/home-assistant/base/configuration.yaml)); o resto do `/config` fica no NAS e o histórico no Postgres (CNPG). No notebook ele usa `hostNetwork` (descoberta na LAN; também responde em `<IP do notebook>:8123`) e o Bluetooth do host via D-Bus. Veja o [ADR 009](docs/adr/009-home-assistant.md).
 
 1. **NAS (UI do OMV):** crie a shared folder `home-assistant` e um share NFS **Read/Write** para `<IP Tailscale do notebook>/32` com as mesmas opções do `immich-data`. Coloque o path em `nas_storage_exports.home_assistant` e rode `make plan` e `make apply`.
-2. **Primeiro acesso:** abra `https://casa.<sua-tailnet>` e crie o usuário dono.
-3. **Alexa:** ative na conta Amazon o 2FA por app autenticador (SMS não serve) e adicione a integração **Alexa Devices** em *Settings → Devices & services*. A lista de compras vira uma entidade `todo`.
-4. **grocery-ops:** crie um usuário `grocery-ops` no HA, gere um *long-lived access token* no perfil dele e guarde-o como `*.sops.yaml` no `deploy/` do repo do grocery-ops. O app chama `http://home-assistant.home-assistant.svc:8123` (contrato no ADR 009).
+2. **Primeiro acesso (direto, sem o proxy):** abra `http://<IP do notebook>:8123` (LAN ou IP Tailscale do notebook; funciona por causa do `hostNetwork`) e crie o usuário dono. Pelo `https://casa.<sua-tailnet>` o HA responde 400 até o passo seguinte.
+3. **Confiar no proxy do Tailscale:** desde o 2026.8 a config HTTP é só pela UI (o bloco `http:` do YAML é ignorado). Em *Settings → System → Network → HTTP server*, ligue *Trust X-Forwarded-For*, coloque `10.42.0.0/16` em *Trusted proxies* e salve. O HA reinicia e pede confirmação: **confirme em até 5 minutos, ainda pelo acesso direto**, senão ele volta à config anterior. Depois disso `https://casa.<sua-tailnet>` funciona.
+4. **Alexa:** ative na conta Amazon o 2FA por app autenticador (SMS não serve) e adicione a integração **Alexa Devices** em *Settings → Devices & services*. A lista de compras vira uma entidade `todo`. Depois, em *Alexa Devices → ⋮ → System options*, **desligue "Enable polling for changes"**: com polling a Amazon devolve 429 (Too Many Requests) a cada poucos ciclos e todas as entidades ficam `unavailable`. As listas continuam sincronizadas nos dois sentidos, porque chegam por push.
+5. **grocery-ops:** crie um usuário `grocery-ops` no HA, gere um *long-lived access token* no perfil dele e guarde-o como `*.sops.yaml` no `deploy/` do repo do grocery-ops. O app chama `http://home-assistant.home-assistant.svc:8123` (contrato no ADR 009).
 
 ## Backup off-site do NAS (restic → Hetzner Storage Box)
 
-Todo dia às 05:00 o CronJob `restic-backup` (namespace `backup`) envia a raiz do SSD do NAS para um Storage Box BX11 da Hetzner. Ele lê pelo NFS em modo só leitura, envia por SFTP com criptografia do restic e mantém 7 snapshots diários, 4 semanais e 6 mensais. O Storage Box tira ainda 7 snapshots diários próprios. O box é criado pelo OpenTofu (`infra/hetzner/`), com o state criptografado no git. Veja o [ADR 010](docs/adr/010-offsite-backup-hetzner-restic.md).
+Todo dia às 05:00 o CronJob `restic-backup` (namespace `backup`) envia a raiz do SSD do NAS para um Storage Box BX11 da Hetzner. Ele lê pelo NFS em modo só leitura, envia por SFTP com criptografia do restic e mantém 7 snapshots diários, 4 semanais e 6 mensais. O Storage Box tira ainda 7 snapshots diários próprios. O box é criado pelo OpenTofu (`infra/hetzner/`), com o state criptografado no git. Veja o [ADR 011](docs/adr/011-offsite-backup-hetzner-restic.md).
 
 A chave SSH do restic (`infra/hetzner/restic_ed25519.pub` + Secret SOPS) e a senha do repositório já estão no repo. Para colocar no ar:
 
@@ -273,6 +275,7 @@ Os dois são opcionais: sem eles, apps de repos públicos com imagens públicas 
 | `make plan` | Dry-run (`--check --diff`) contra o notebook |
 | `make apply` | Roda `lint` e depois aplica |
 | `make idempotency` | Reaplica e falha se algo mudar |
+| `make kernel-upgrade` | Instala o kernel novo, reinicia o notebook e só remove o antigo se nó, Applications, Postgres e AppArmor estiverem ok ([ADR 010](docs/adr/010-notebook-os-updates.md)) |
 | `make kubeconfig` | Grava `~/.kube/notebook.yaml` apontando para `https://<host>.<tailnet>:6443` |
 | `make reset` | Remove o k3s (pede confirmação; não toca Tailscale nem SSH) |
 | `make test` | lint + helm unittest + render/kubeconform/kube-linter |

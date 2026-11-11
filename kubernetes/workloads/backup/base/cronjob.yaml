@@ -1,4 +1,4 @@
-# restic diário: raiz do SSD do NAS -> Storage Box da Hetzner (ADR 010).
+# restic diário: raiz do SSD do NAS -> Storage Box da Hetzner (ADR 011).
 # No base (CI) o mesmo script roda contra um repositório local em /tmp, com uma senha
 # de teste; overlays/nas troca /config pelo Secret SOPS e /source pela PVC NFS.
 apiVersion: batch/v1
