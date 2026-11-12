@@ -1,0 +1,309 @@
+# Syncthing no NAS (openmediavault). Única exceção ao "o Ansible não altera o
+# NAS" (ADR 011): o OMV não tem como gerenciar o Syncthing pela UI.
+
+# --- Pacote -----------------------------------------------------------------
+
+- name: Ler pacotes instalados
+  ansible.builtin.package_facts:
+
+- name: Instalar o syncthing fixado
+  when: >-
+    'syncthing' not in ansible_facts.packages
+    or ansible_facts.packages['syncthing'][0].version != nas_syncthing_version
+  block:
+    - name: Baixar o .deb do syncthing
+      ansible.builtin.get_url:
+        url: "https://github.com/syncthing/syncthing/releases/download/v{{ nas_syncthing_version }}/syncthing_{{ nas_syncthing_version }}_amd64.deb"
+        # /tmp é tmpfs: nada de escrita extra no pendrive do sistema.
+        dest: "/tmp/syncthing_{{ nas_syncthing_version }}_amd64.deb"
+        checksum: "sha256:{{ nas_syncthing_deb_sha256 }}"
+        mode: "0644"
+      register: nas_syncthing_deb
+
+    - name: Instalar o .deb do syncthing
+      ansible.builtin.apt:
+        deb: "/tmp/syncthing_{{ nas_syncthing_version }}_amd64.deb"
+      when: not (ansible_check_mode and nas_syncthing_deb is changed)
+      notify: Reiniciar syncthing
+
+- name: Segurar o syncthing na versão fixada
+  ansible.builtin.dpkg_selections:
+    name: syncthing
+    selection: hold
+
+# --- Migração da instalação antiga (root) ------------------------------------
+
+- name: Parar a instância antiga (root)
+  ansible.builtin.systemd_service:
+    name: syncthing@root
+    state: stopped
+    enabled: false
+
+- name: Criar o diretório de estado no disco de dados
+  ansible.builtin.file:
+    path: "{{ nas_syncthing_home }}"
+    state: directory
+    owner: "{{ nas_syncthing_user }}"
+    group: "{{ nas_syncthing_group }}"
+    mode: "0700"
+
+- name: Ver se existe a instalação antiga
+  ansible.builtin.stat:
+    path: "{{ nas_syncthing_legacy_home }}/cert.pem"
+  register: nas_syncthing_legacy_cert
+
+# Copia cert/key, config e índice: o device ID continua o mesmo e os peers não
+# precisam parear de novo. O diretório antigo fica como backup.
+- name: Copiar a identidade da instalação antiga
+  ansible.builtin.command:
+    cmd: cp -a {{ nas_syncthing_legacy_home | quote }}/. {{ nas_syncthing_home | quote }}/
+    creates: "{{ nas_syncthing_home }}/cert.pem"
+  when: nas_syncthing_legacy_cert.stat.exists
+  register: nas_syncthing_migrated
+  notify: Reiniciar syncthing
+
+- name: Passar o estado para o usuário do syncthing
+  ansible.builtin.file:
+    path: "{{ nas_syncthing_home }}"
+    state: directory
+    recurse: true
+    owner: "{{ nas_syncthing_user }}"
+    group: "{{ nas_syncthing_group }}"
+
+# A instância antiga rodava como root e deixou arquivos de root no vault, que o
+# Obsidian do cluster (NFS com all_squash 1000:100) não consegue regravar.
+- name: Procurar arquivos de root nas pastas sincronizadas
+  ansible.builtin.command:
+    argv: [find, "{{ item.path }}", -user, root]
+  loop: "{{ nas_syncthing_folders }}"
+  loop_control:
+    label: "{{ item.label }}"
+  register: nas_syncthing_root_owned
+  changed_when: false
+  check_mode: false
+
+- name: Corrigir o dono dos arquivos de root
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ nas_syncthing_user }}"
+    group: "{{ nas_syncthing_group }}"
+  loop: "{{ nas_syncthing_root_owned.results | map(attribute='stdout_lines') | flatten }}"
+
+# --- Serviço -----------------------------------------------------------------
+
+- name: Criar o diretório de drop-in do syncthing
+  ansible.builtin.file:
+    path: "/etc/systemd/system/syncthing@{{ nas_syncthing_user }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configurar o syncthing no systemd
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/syncthing@{{ nas_syncthing_user }}.service.d/override.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Gerenciado pelo Ansible (2026-kubernetes, role nas_syncthing)
+      [Unit]
+      # Só sobe depois do disco de dados montado.
+      RequiresMountsFor={{ ([nas_syncthing_home] + nas_syncthing_folders | map(attribute='path')) | join(' ') }}
+
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/syncthing serve --no-browser --no-restart --home={{ nas_syncthing_home }}
+      # Grupo com escrita, como o resto do compartilhamento (diretórios 2775).
+      UMask=0002
+  register: nas_syncthing_dropin
+  notify: Reiniciar syncthing
+
+- name: Habilitar e iniciar o syncthing
+  ansible.builtin.systemd_service:
+    name: "syncthing@{{ nas_syncthing_user }}"
+    enabled: true
+    state: started
+    # O drop-in precisa valer já no primeiro start (senão ele cria uma
+    # identidade nova no $HOME do usuário).
+    daemon_reload: "{{ nas_syncthing_dropin is changed }}"
+  register: nas_syncthing_service
+
+- name: Aplicar o restart pendente
+  ansible.builtin.meta: flush_handlers
+
+# --- Config declarativa pela REST API ----------------------------------------
+
+# Em check mode, se o serviço ou o estado ainda vão mudar, não há API para ler.
+- name: Ver se a API pode ser consultada
+  ansible.builtin.set_fact:
+    nas_syncthing_api_ready: >-
+      {{ not ansible_check_mode
+         or not (nas_syncthing_service is changed
+                 or nas_syncthing_dropin is changed
+                 or nas_syncthing_migrated is changed) }}
+
+- name: Configurar pela API
+  when: nas_syncthing_api_ready | bool
+  vars:
+    nas_syncthing_api: "http://{{ nas_syncthing_gui_address }}/rest"
+  block:
+    - name: Esperar a API do syncthing
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/noauth/health"
+      register: nas_syncthing_health
+      until: nas_syncthing_health.status == 200
+      retries: 30
+      delay: 2
+      check_mode: false
+
+    - name: Ler a config.xml
+      ansible.builtin.slurp:
+        src: "{{ nas_syncthing_home }}/config.xml"
+      register: nas_syncthing_config_xml
+      no_log: true
+
+    - name: Extrair a API key
+      ansible.builtin.set_fact:
+        nas_syncthing_headers:
+          X-API-Key: "{{ nas_syncthing_config_xml.content | b64decode | regex_search('<apikey>([^<]+)</apikey>', '\\1') | first }}"
+      no_log: true
+
+    - name: Ler o status do syncthing
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/system/status"
+        headers: "{{ nas_syncthing_headers }}"
+      register: nas_syncthing_status
+      check_mode: false
+
+    - name: Ler opções e GUI
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/config/{{ item }}"
+        headers: "{{ nas_syncthing_headers }}"
+      loop: [options, gui]
+      register: nas_syncthing_current
+      check_mode: false
+
+    - name: Aplicar opções e GUI
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/config/{{ item.section }}"
+        method: PATCH
+        headers: "{{ nas_syncthing_headers }}"
+        body_format: json
+        body: "{{ item.desired }}"
+      loop:
+        - section: options
+          current: "{{ nas_syncthing_current.results[0].json }}"
+          desired: "{{ nas_syncthing_options }}"
+        - section: gui
+          current: "{{ nas_syncthing_current.results[1].json }}"
+          desired:
+            address: "{{ nas_syncthing_gui_address }}"
+      loop_control:
+        label: "{{ item.section }}"
+      when:
+        - not ansible_check_mode
+        - item.current | combine(item.desired) != item.current
+      changed_when: true
+
+    - name: Ler devices e pastas
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/config/{{ item }}"
+        headers: "{{ nas_syncthing_headers }}"
+      loop: [devices, folders]
+      register: nas_syncthing_lists
+      check_mode: false
+
+    - name: Calcular o estado desejado
+      ansible.builtin.set_fact:
+        nas_syncthing_my_id: "{{ nas_syncthing_status.json.myID }}"
+        nas_syncthing_current_devices: "{{ nas_syncthing_lists.results[0].json | items2dict(key_name='deviceID', value_name='name') }}"
+        nas_syncthing_current_folders: "{{ nas_syncthing_lists.results[1].json | map(attribute='id') | list }}"
+
+    - name: Adicionar ou renomear devices
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/config/devices/{{ item.id }}"
+        method: "{{ 'PATCH' if item.id in nas_syncthing_current_devices else 'PUT' }}"
+        headers: "{{ nas_syncthing_headers }}"
+        body_format: json
+        body:
+          deviceID: "{{ item.id }}"
+          name: "{{ item.name }}"
+      loop: "{{ nas_syncthing_devices }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - not ansible_check_mode
+        - nas_syncthing_current_devices[item.id] | default(None) != item.name
+      changed_when: true
+
+    - name: Aplicar as pastas
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/config/folders/{{ item.id }}"
+        method: "{{ 'PATCH' if item.id in nas_syncthing_current_folders else 'PUT' }}"
+        headers: "{{ nas_syncthing_headers }}"
+        body_format: json
+        body:
+          id: "{{ item.id }}"
+          label: "{{ item.label }}"
+          path: "{{ item.path }}"
+          type: sendreceive
+          devices: "{{ nas_syncthing_wanted | map('community.general.dict_kv', 'deviceID') | list }}"
+      vars:
+        nas_syncthing_wanted: "{{ (item.devices + [nas_syncthing_my_id]) | unique | sort }}"
+        nas_syncthing_existing: >-
+          {{ nas_syncthing_lists.results[1].json
+             | selectattr('id', 'equalto', item.id) | first | default({}) }}
+      loop: "{{ nas_syncthing_folders }}"
+      loop_control:
+        label: "{{ item.label }}"
+      when:
+        - not ansible_check_mode
+        - >-
+          nas_syncthing_existing == {}
+          or nas_syncthing_existing.label != item.label
+          or nas_syncthing_existing.path != item.path
+          or nas_syncthing_existing.type != 'sendreceive'
+          or (nas_syncthing_existing.devices | map(attribute='deviceID') | sort) != nas_syncthing_wanted
+      changed_when: true
+
+    # Depois das pastas: o device já não está compartilhado com nenhuma.
+    - name: Remover devices fora da lista
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/config/devices/{{ item }}"
+        method: DELETE
+        headers: "{{ nas_syncthing_headers }}"
+      loop: >-
+        {{ nas_syncthing_current_devices.keys()
+           | difference(nas_syncthing_devices | map(attribute='id'))
+           | difference([nas_syncthing_my_id]) }}
+      loop_control:
+        label: "{{ nas_syncthing_current_devices[item] }} ({{ item[:7] }})"
+      when: not ansible_check_mode
+      changed_when: true
+
+    - name: Avisar sobre pastas fora da lista
+      ansible.builtin.debug:
+        msg: >-
+          Pastas no syncthing que o Ansible não gerencia (não foram apagadas):
+          {{ nas_syncthing_current_folders | difference(nas_syncthing_folders | map(attribute='id')) }}
+      when: nas_syncthing_current_folders | difference(nas_syncthing_folders | map(attribute='id')) | length > 0
+
+    - name: Ler o estado das pastas
+      ansible.builtin.uri:
+        url: "{{ nas_syncthing_api }}/db/status?folder={{ item.id }}"
+        headers: "{{ nas_syncthing_headers }}"
+      loop: "{{ nas_syncthing_folders }}"
+      loop_control:
+        label: "{{ item.label }}"
+      register: nas_syncthing_db_status
+      check_mode: false
+
+    - name: Garantir que nenhuma pasta está com erro
+      ansible.builtin.assert:
+        that: item.json.state != 'error'
+        fail_msg: "Pasta {{ item.item.label }}: {{ item.json.error | default('erro') }}"
+        quiet: true
+      loop: "{{ nas_syncthing_db_status.results }}"
+      loop_control:
+        label: "{{ item.item.label }}"

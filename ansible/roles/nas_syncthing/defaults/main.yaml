@@ -1,0 +1,16 @@
+# Usuário dono do vault no NAS (o mesmo uid/gid do all_squash dos exports NFS).
+nas_syncthing_user: Bernardo
+nas_syncthing_group: users
+# Instalação antiga (rodava como root, estado no pendrive): origem da migração
+# da identidade (cert/key), para o device ID não mudar.
+nas_syncthing_legacy_home: /root/.local/state/syncthing
+# GUI/API só em loopback; acesso por túnel SSH (veja o README).
+nas_syncthing_gui_address: 127.0.0.1:8384
+# Subconjunto de /rest/config/options aplicado pelo role.
+nas_syncthing_options:
+  startBrowser: false
+  urAccepted: -1
+  globalAnnounceEnabled: true
+  relaysEnabled: true
+nas_syncthing_devices: []
+nas_syncthing_folders: []

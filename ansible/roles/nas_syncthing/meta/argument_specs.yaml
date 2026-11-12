@@ -1,0 +1,70 @@
+argument_specs:
+  main:
+    short_description: Syncthing no NAS (única exceção ao "Ansible não altera o NAS"; ADR 011)
+    options:
+      nas_syncthing_version:
+        description: Versão do pacote syncthing (definida em group_vars/all)
+        type: str
+        required: true
+      nas_syncthing_deb_sha256:
+        description: sha256 do syncthing_<versão>_amd64.deb publicado no release do GitHub
+        type: str
+        required: true
+      nas_syncthing_home:
+        description: >-
+          Diretório de estado (config, chaves, índice) no disco de dados do NAS,
+          fora do pendrive do sistema (definido em ansible/inventory/local.yaml)
+        type: str
+        required: true
+      nas_syncthing_user:
+        type: str
+        default: Bernardo
+      nas_syncthing_group:
+        type: str
+        default: users
+      nas_syncthing_legacy_home:
+        type: str
+        default: /root/.local/state/syncthing
+      nas_syncthing_gui_address:
+        type: str
+        default: 127.0.0.1:8384
+      nas_syncthing_options:
+        description: Campos de /rest/config/options aplicados (os demais ficam como estão)
+        type: dict
+        default: {}
+      nas_syncthing_devices:
+        description: >-
+          Devices remotos. É a lista completa: devices que não estão aqui são
+          removidos (o próprio NAS nunca é).
+        type: list
+        elements: dict
+        default: []
+        options:
+          id:
+            type: str
+            required: true
+          name:
+            type: str
+            required: true
+      nas_syncthing_folders:
+        description: >-
+          Pastas gerenciadas. Pastas fora da lista não são apagadas, só
+          aparecem num aviso.
+        type: list
+        elements: dict
+        default: []
+        options:
+          id:
+            type: str
+            required: true
+          label:
+            type: str
+            required: true
+          path:
+            type: str
+            required: true
+          devices:
+            description: IDs dos devices que compartilham a pasta (o NAS entra sozinho)
+            type: list
+            elements: str
+            required: true

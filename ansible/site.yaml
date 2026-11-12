@@ -33,3 +33,14 @@
     - role: kubeconfig_export
       when: tailscale_enabled | bool
       tags: [kubeconfig]
+
+# Única exceção ao "o Ansible não altera o NAS" (ADR 011): o Syncthing do NAS
+# não é gerenciável pela UI do openmediavault. Sem grupo `nas` (CI), não roda.
+- name: Syncthing do NAS
+  hosts: nas
+  become: false
+  gather_facts: true
+  roles:
+    - role: nas_syncthing
+      when: nas_syncthing_enabled | bool
+      tags: [nas, syncthing]

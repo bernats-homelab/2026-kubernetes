@@ -82,7 +82,7 @@ O Immich exibe, **somente leitura**, as fotos e vídeos do NAS como External Lib
 
 ### 1. NAS: exports NFS no OMV (uma vez, pela UI do openmediavault)
 
-O playbook **nunca** altera o NAS; ele só confere o que você configurou aqui.
+O playbook não altera o NAS; ele só confere o que você configurou aqui. A única exceção é o Syncthing (veja [Syncthing no NAS](#syncthing-no-nas)).
 
 1. **Services → NFS → Settings**: marque *Enabled*, clique em *Save* e aplique as mudanças (banner amarelo).
 2. **Storage → Shared Folders**: crie a pasta `immich-data` no disco com espaço (o Immich vai gravar de ~12 a 70 GB nela). A pasta das fotos já deve existir. Se as fotos estão espalhadas pelo disco, ela pode ser a shared folder da raiz do disco; nesse caso, veja os import paths no passo 3.
@@ -134,6 +134,22 @@ O Obsidian desktop roda no cluster ([linuxserver/obsidian](https://docs.linuxser
 3. **Primeiro acesso:** no Obsidian, use *Open folder as vault* em `/vaults/borbsidian`. A escolha fica salva em `/config`.
 
 **Edição em vários lugares.** Por NFS, o Obsidian do cluster não é avisado de mudanças feitas por outros dispositivos (Syncthing, SMB), porque o inotify não atravessa NFS. Edite num lugar por vez. Ao voltar para o Obsidian do navegador, use *Reload app without saving* (paleta de comandos) antes de editar, para não sobrescrever a versão mais nova.
+
+### Syncthing no NAS
+
+O vault chega ao celular pelo Syncthing do NAS. Ele é a única coisa no NAS que o Ansible altera: o OMV não gerencia o Syncthing pela UI. Veja o [ADR 011](docs/adr/011-syncthing-nas-ansible.md).
+
+- **Inventário:** preencha o grupo `nas` de `inventory.example.yaml`. Ele leva `ansible_user: root`, `nas_syncthing_home` (um diretório no disco de dados, fora do pendrive do sistema), `nas_syncthing_devices` e `nas_syncthing_folders`.
+  - `nas_syncthing_devices` é a lista **completa**: um device que não estiver nela é removido.
+  - Uma pasta fora de `nas_syncthing_folders` não é apagada, só gera um aviso.
+- **SSH:** a chave do WSL precisa estar no `/root/.ssh/authorized_keys` do NAS, e a host key do NAS no `known_hosts` do WSL (rode `ssh root@<nas>` uma vez e aceite). O `host_key_checking` continua ligado.
+- **Aplicar:** `make plan` e `make apply`. O segundo play (`hosts: nas`) instala o `.deb` fixado em `group_vars/all` e habilita `syncthing@<usuário>` no boot. Depois aplica opções, devices e pastas pela REST API. Qualquer mudança feita pela GUI nesses itens volta ao que está no inventário no próximo apply.
+- **Parear um device novo:** adicione o ID em `nas_syncthing_devices` (e nos `devices` da pasta), rode `make apply` e aceite no outro lado.
+- **GUI:** só escuta em `127.0.0.1:8384`. Para abrir no navegador:
+  ```bash
+  ssh -L 8384:127.0.0.1:8384 root@<nas>
+  ```
+  Depois acesse `http://localhost:8384`.
 
 ## Home Assistant (ponte da lista de compras da Alexa)
 

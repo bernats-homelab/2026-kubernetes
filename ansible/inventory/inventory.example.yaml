@@ -20,3 +20,21 @@ all:
           # OpenTelemetry Collector no host (journald + métricas) -> gateway do cluster.
           otel_host_agent_enabled: true
           otel_host_agent_endpoint: <nome-magicdns-do-gateway>:4317
+    # NAS: o Ansible só gerencia o Syncthing dele (ADR 011); o resto é pela UI do OMV.
+    nas:
+      hosts:
+        nas:
+          ansible_host: <hostname-magicdns-do-nas>
+          ansible_user: root
+          nas_syncthing_enabled: true
+          # Estado (config, chaves, índice) no disco de dados, fora do pendrive.
+          nas_syncthing_home: </srv/dev-disk-by-uuid-.../appdata/syncthing>
+          # Lista completa: devices fora dela são removidos.
+          nas_syncthing_devices:
+            - id: <DEVICE-ID-DO-CELULAR>
+              name: <nome>
+          nas_syncthing_folders:
+            - id: <id-da-pasta>
+              label: <rótulo>
+              path: </srv/dev-disk-by-uuid-.../caminho/do/vault>
+              devices: [<DEVICE-ID-DO-CELULAR>]

@@ -24,10 +24,17 @@ helm_sha256: 0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b
 # Mesma versão da imagem dos coletores do cluster (kubernetes/values/otel-*.yaml)
 otel_host_agent_version: 0.163.2
 otel_host_agent_deb_sha256: 5a175c93c5a560368c1bdbf0ec25fdc06e7b7d852f424bf7dbc36da6fd495db7
+# Syncthing do NAS (.deb do release no GitHub)
+nas_syncthing_version: 2.1.3
+nas_syncthing_deb_sha256: ed148130661a27cd3961fda58bd91c17b205fa3d7ab312a1d6cbf21e59731f30
 
 # true só no notebook (ansible/inventory/local.yaml, como var de host): instala o
 # OpenTelemetry Collector no host. No CI não há tailnet para alcançar o gateway "otel".
 otel_host_agent_enabled: false
+
+# true só no NAS (grupo `nas` de ansible/inventory/local.yaml, como var de host):
+# gerencia o Syncthing do NAS (ADR 011). O CI não tem grupo `nas`.
+nas_syncthing_enabled: false
 
 # Versões dos charts: fonte única em kubernetes/apps/values.yaml (lido no controller)
 apps_values: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../kubernetes/apps/values.yaml') | from_yaml }}"
