@@ -28,7 +28,8 @@ jobs:
           path: |
             ~/.cache/pre-commit
             .cache/kubeconform
-          key: lint-${{ hashFiles('.pre-commit-config.yaml') }}
+            .cache/tofu-plugins
+          key: lint-${{ hashFiles('.pre-commit-config.yaml', 'infra/**/.terraform.lock.hcl') }}
       - name: pre-commit (mesma config do WSL)
         run: pre-commit run --all-files --show-diff-on-failure
 

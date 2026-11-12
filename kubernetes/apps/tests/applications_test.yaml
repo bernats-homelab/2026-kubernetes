@@ -9,6 +9,7 @@ templates:
   - templates/obsidian.yaml
   - templates/home-assistant-database.yaml
   - templates/home-assistant.yaml
+  - templates/backup.yaml
   - templates/prometheus.yaml
   - templates/loki.yaml
   - templates/tempo.yaml
@@ -69,6 +70,10 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "3"
         template: templates/home-assistant.yaml
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-wave"]
+          value: "3"
+        template: templates/backup.yaml
       - equal:
           path: metadata.annotations["argocd.argoproj.io/sync-wave"]
           value: "2"
@@ -279,6 +284,22 @@ tests:
       - equal:
           path: spec.sources[1].path
           value: kubernetes/workloads/home-assistant/storage/base
+
+  - it: backup off-site com NAS usa o overlay nas (Storage Box + PV do NAS)
+    template: templates/backup.yaml
+    asserts:
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/backup/overlays/nas
+
+  - it: sem NAS (CI) o backup usa base (repositório local, sem segredos)
+    template: templates/backup.yaml
+    set:
+      nasStorage.enabled: false
+    asserts:
+      - equal:
+          path: spec.source.path
+          value: kubernetes/workloads/backup/base
 
   - it: versões dos charts de observabilidade vêm do values (fonte única; um chart, duas releases do coletor)
     set:

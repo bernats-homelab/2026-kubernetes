@@ -12,7 +12,7 @@ argument_specs:
         required: true
         options:
           photos:
-            description: Export somente leitura com as fotos (External Library do Immich)
+            description: Export somente leitura da raiz do SSD (External Library do Immich e origem do backup off-site)
             type: str
             required: true
           data:
@@ -44,6 +44,7 @@ argument_specs:
           - {name: obsidian-vault, export: obsidian, namespace: obsidian, access_mode: ReadWriteOnce, read_only: false, write_test: true, capacity: 10Gi}
           - {name: home-assistant-config, export: home_assistant, namespace: home-assistant, access_mode: ReadWriteOnce,
              read_only: false, write_test: true, capacity: 5Gi}
+          - {name: backup-source, export: photos, namespace: backup, access_mode: ReadOnlyMany, read_only: true, write_test: false, capacity: 1Ti}
         options:
           name:
             type: str

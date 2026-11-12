@@ -28,6 +28,8 @@ readonly KUBE_LINTER_SHA256="1a6d8419b11971372971fdbc22682b684ebfb7cf1c39591662d
 readonly KUSTOMIZE_VERSION="v5.8.3"
 readonly KUSTOMIZE_SHA256="cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61"
 readonly HELM_UNITTEST_VERSION="v1.2.1"
+readonly TOFU_VERSION="v1.13.9"
+readonly TOFU_SHA256="b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857"
 # -----------------------------------------------------------------------------
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -109,6 +111,9 @@ main() {
   install_bin kustomize "${KUSTOMIZE_VERSION}" \
     "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
     "${KUSTOMIZE_SHA256}" kustomize
+  install_bin tofu "${TOFU_VERSION}" \
+    "https://github.com/opentofu/opentofu/releases/download/${TOFU_VERSION}/tofu_${TOFU_VERSION#v}_linux_amd64.tar.gz" \
+    "${TOFU_SHA256}" tofu
 
   if ! helm plugin list 2>/dev/null | grep -q "^unittest[[:space:]]\+${HELM_UNITTEST_VERSION#v}"; then
     log "helm-unittest ${HELM_UNITTEST_VERSION}"

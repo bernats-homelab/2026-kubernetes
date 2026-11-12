@@ -8,6 +8,10 @@ creation_rules:
   - path_regex: (^|/)ansible/secrets/[^/]+\.sops\.yaml$
     age: age1fskvnv59jkjddglqvsllm3d54qtd6xl0u00utexhd0t0vddlfp8qe2plxs
 
+  # OpenTofu (token da Hetzner e passphrase do state): só o WSL descriptografa.
+  - path_regex: (^|/)infra/[^/]+/[^/]+\.sops\.yaml$
+    age: age1fskvnv59jkjddglqvsllm3d54qtd6xl0u00utexhd0t0vddlfp8qe2plxs
+
   # Demo do KSOPS, exercitado no e2e: conteúdo sem valor, legível pelo CI.
   - path_regex: (^|/)kubernetes/workloads/hello-world/.+\.sops\.yaml$
     unencrypted_regex: ^(apiVersion|metadata|kind|type)$

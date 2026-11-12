@@ -1,0 +1,40 @@
+# Notebook: backup da raiz do SSD do NAS (PV backup-source, criado pelo Ansible) para o
+# Storage Box (infra/hetzner). O segredo fica só aqui porque o CI não descriptografa
+# segredos fora do hello-world. RESTIC_REPOSITORY e known_hosts: `make backup-secret`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: backup
+resources:
+  - ../../base
+  - pvc.yaml
+generators:
+  - secret-generator.yaml
+patches:
+  - target:
+      kind: CronJob
+      name: restic-backup
+    patch: |
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/volumes/0
+        value:
+          name: config
+          secret:
+            secretName: restic
+            defaultMode: 288  # 0440: grupo 100 (fsGroup) lê; o script copia a chave com 0600
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/volumes/1
+        value:
+          name: source
+          persistentVolumeClaim:
+            claimName: backup-source
+            readOnly: true
+  # O ConfigMap de teste do CI não serve aqui.
+  - target:
+      kind: ConfigMap
+      name: restic-ci
+    patch: |
+      $patch: delete
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: restic-ci

@@ -1,0 +1,18 @@
+# base = CI: repositório local e senha de teste. overlays/nas = notebook (Storage Box).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: backup
+labels:
+  - pairs:
+      app.kubernetes.io/name: restic-backup
+resources:
+  - cronjob.yaml
+configMapGenerator:
+  - name: restic-backup-script
+    files:
+      - backup.sh
+  # Só no CI: o overlay nas usa o Secret "restic" no lugar.
+  - name: restic-ci
+    literals:
+      - RESTIC_REPOSITORY=/tmp/repo
+      - RESTIC_PASSWORD=somente-teste-do-ci
