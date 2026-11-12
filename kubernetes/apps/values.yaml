@@ -26,7 +26,7 @@ apps:
   # PWA de lista de compras (Nuxt 4) → https://grocery-ops.<sua-tailnet>
   grocery-ops:
     repoURL: https://github.com/Bemesko/grocery-ops
-    targetRevision: v0.4.3
+    targetRevision: v0.5.0
 
 # O próprio template como app externa, ligado só no CI (Ansible external_apps_smoke_enabled):
 # o e2e prova o caminho repo externo -> AppProject -> Application. Use uma tag publicada.
